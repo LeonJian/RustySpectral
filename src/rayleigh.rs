@@ -514,6 +514,7 @@ pub fn check_and_download(dry_run: bool, aerosol_types: Option<&[String]>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use approx::assert_abs_diff_eq;
     use ndarray::arr1;
 
     #[test]
@@ -592,5 +593,78 @@ mod tests {
     fn test_get_reflectance_lut_file_not_found() {
         let result = get_reflectance_lut_from_file(Path::new("/nonexistent/path.h5"));
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_reduce_rayleigh_no_reduction() {
+        let sun_zenith = arr1(&[70.0, 65.0, 60.0]);
+        let in_rayleigh = arr1(&[50.0, 50.0, 50.0]);
+        let result = reduce_rayleigh_highzenith(&sun_zenith, &in_rayleigh, 70.0, 90.0, 1.0);
+        for i in 0..3 {
+            assert_abs_diff_eq!(result[i], in_rayleigh[i], epsilon = 1e-6);
+        }
+    }
+
+    #[test]
+    fn test_reduce_rayleigh_moderate() {
+        let sun_zenith = arr1(&[70.0, 65.0, 60.0]);
+        let in_rayleigh = arr1(&[50.0, 50.0, 50.0]);
+        let result = reduce_rayleigh_highzenith(&sun_zenith, &in_rayleigh, 30.0, 90.0, 1.0);
+        let expected = arr1(&[16.666_666_67, 20.833_333_33, 25.0]);
+        for i in 0..3 {
+            assert_abs_diff_eq!(result[i], expected[i], epsilon = 1e-3);
+        }
+    }
+
+    #[test]
+    fn test_reduce_rayleigh_extreme() {
+        let sun_zenith = arr1(&[70.0, 65.0, 60.0]);
+        let in_rayleigh = arr1(&[50.0, 50.0, 50.0]);
+        let result = reduce_rayleigh_highzenith(&sun_zenith, &in_rayleigh, 30.0, 90.0, 1.5);
+        let expected = arr1(&[0.0, 6.25, 12.5]);
+        for i in 0..3 {
+            assert_abs_diff_eq!(result[i], expected[i], epsilon = 1e-3);
+        }
+    }
+
+    #[test]
+    fn test_wavelength_index_factor() {
+        let wvl_coord = arr1(&[631.0, 636.0]);
+        let (idx, factor) = get_wavelength_index_and_factor(&wvl_coord, 634.0);
+        assert_eq!(idx, 1);
+        assert_abs_diff_eq!(factor, (636.0 - 634.0) / (636.0 - 631.0), epsilon = 1e-10);
+    }
+
+    #[test]
+    fn test_normalize_sensor_full() {
+        assert_eq!(normalize_sensor("GOES-16", "abi"), "abi");
+        assert_eq!(normalize_sensor("NOAA-19", "avhrr/3"), "avhrr3");
+        assert_eq!(normalize_sensor("FY-4A", "agri"), "agri");
+        assert_eq!(normalize_sensor("Himawari-8", "ahi"), "ahi");
+        assert_eq!(normalize_sensor("NOAA-20", "viirs"), "viirs");
+        assert_eq!(normalize_sensor("Meteosat-9", "seviri"), "seviri");
+    }
+
+    #[test]
+    fn test_normalize_sensor_unknown_platform() {
+        assert_eq!(normalize_sensor("Unknown", "myinstr"), "myinstr");
+    }
+
+    #[test]
+    fn test_aerosol_types_check() {
+        let types = crate::utils::AEROSOL_TYPES;
+        assert_eq!(types.len(), 11);
+        assert!(types.contains(&"marine_clean_aerosol"));
+        assert!(types.contains(&"desert_aerosol"));
+        assert!(types.contains(&"rayleigh_only"));
+    }
+
+    #[test]
+    fn test_atmospheres_check() {
+        let atms = crate::utils::ATMOSPHERES;
+        assert_eq!(atms.len(), 6);
+        let names: Vec<&str> = atms.iter().map(|(n, _)| *n).collect();
+        assert!(names.contains(&"midlatitude_summer"));
+        assert!(names.contains(&"us_standard"));
     }
 }
