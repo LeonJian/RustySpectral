@@ -1,0 +1,13 @@
+[workspace]
+
+[package]
+name = "rustyspectral"
+version = "0.1.0"
+edition = "2021"
+description = "Rust port of pyspectral: satellite sensor spectral response & solar spectrum analysis"
+
+[dependencies]
+ndarray = "0.16"
+
+[dev-dependencies]
+approx = "0.5"
