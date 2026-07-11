@@ -84,7 +84,7 @@ pub fn blackbody_wn_rad2temp_array(wavenumber: f64, radiance: &Array2<f64>) -> A
 mod tests {
     use super::*;
     use approx::assert_abs_diff_eq;
-    use ndarray::{arr2, array};
+    use ndarray::{arr2};
 
     const RAD_11MICRON_300K: f64 = 9573176.935507433;
     const RAD_11MICRON_301K: f64 = 9714686.576498277;

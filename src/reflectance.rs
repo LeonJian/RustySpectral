@@ -5,6 +5,8 @@ use crate::blackbody::blackbody;
 use crate::utils::trapezoid;
 
 pub const TERMINATOR_LIMIT: f64 = 85.0;
+pub const TB_MIN: f64 = 150.0;
+pub const TB_MAX: f64 = 360.0;
 const EPSILON: f64 = 0.005;
 
 pub struct ReflectanceCalculator {
@@ -154,8 +156,28 @@ impl ReflectanceCalculator {
         result
     }
 
-    pub fn emissive_part(&self, tb_nir: &Array1<f64>) -> Array1<f64> {
+    pub fn emissive_part(&self, tb_nir: &Array1<f64>, _tb_thermal: Option<&Array1<f64>>) -> Array1<f64> {
         self.tb2radiance(tb_nir)
+    }
+
+    pub fn emissive_part_3x(
+        &self,
+        rad3x_t11: &Array1<f64>,
+        r3x: &Array1<f64>,
+        rad3x: &Array1<f64>,
+        tb: bool,
+    ) -> Array1<f64> {
+        let n = rad3x_t11.len();
+        let mut e3x = Array1::zeros(n);
+        for i in 0..n {
+            let val = rad3x_t11[i] * (1.0 - r3x[i]);
+            e3x[i] = if val.is_nan() { rad3x[i] } else { val };
+        }
+        if tb {
+            e3x.mapv(|r| crate::blackbody::blackbody_rad2temp(self.central_wavelength, r))
+        } else {
+            e3x
+        }
     }
 }
 
@@ -340,7 +362,7 @@ mod tests {
         let resp = Array1::ones(36);
         let calc = ReflectanceCalculator::new("NOAA-19", "avhrr3").with_rsr(wvl, resp);
         let tb_nir = arr1(&[290.0]);
-        let emiss_rad = calc.emissive_part(&tb_nir);
+        let emiss_rad = calc.emissive_part(&tb_nir, None);
         assert!(emiss_rad[0] > 0.0);
     }
 

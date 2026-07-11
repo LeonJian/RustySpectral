@@ -1,7 +1,59 @@
 use ndarray::Array1;
+use std::collections::HashMap;
 
 use crate::blackbody::{blackbody, blackbody_rad2temp, C_SPEED, H_PLANCK, K_BOLTZMANN};
 use crate::utils::trapezoid;
+
+pub const TB_MIN: f64 = 150.0;
+pub const TB_MAX: f64 = 360.0;
+pub const EPSILON: f64 = 0.01;
+
+pub type SeviriParams = (f64, f64, f64);
+
+pub fn get_seviri_params() -> HashMap<&'static str, HashMap<&'static str, SeviriParams>> {
+    let mut m = HashMap::new();
+    macro_rules! b { ($band:expr, $($plat:expr => ($vc:expr, $alpha:expr, $beta:expr)),+) => {
+        let mut p = HashMap::new();
+        $( p.insert($plat, ($vc, $alpha, $beta)); )+
+        m.insert($band, p);
+    }; }
+    b!("IR3.9",
+        "Meteosat-8" => (2567.330, 0.9956, 3.410),
+        "Meteosat-9" => (2568.832, 0.9954, 3.438)
+    );
+    b!("WV6.2",
+        "Meteosat-8" => (1598.103, 0.9962, 2.218),
+        "Meteosat-9" => (1600.548, 0.9963, 2.185)
+    );
+    b!("WV7.3",
+        "Meteosat-8" => (1362.081, 0.9991, 0.478),
+        "Meteosat-9" => (1360.330, 0.9991, 0.470)
+    );
+    b!("IR8.7",
+        "Meteosat-8" => (1149.069, 0.9996, 0.179),
+        "Meteosat-9" => (1148.620, 0.9996, 0.179)
+    );
+    b!("IR9.7",
+        "Meteosat-8" => (1034.343, 0.9999, 0.060),
+        "Meteosat-9" => (1035.289, 0.9999, 0.056)
+    );
+    b!("IR10.8",
+        "Meteosat-8" => (930.647, 0.9983, 0.625),
+        "Meteosat-9" => (931.700, 0.9983, 0.640)
+    );
+    b!("IR12.0",
+        "Meteosat-8" => (839.660, 0.9988, 0.397),
+        "Meteosat-9" => (836.445, 0.9988, 0.408)
+    );
+    b!("IR13.4",
+        "Meteosat-8" => (752.387, 0.9981, 0.578),
+        "Meteosat-9" => (751.792, 0.9981, 0.561)
+    );
+    m
+}
+
+pub static SEVIRI: once_cell::sync::Lazy<HashMap<&'static str, HashMap<&'static str, SeviriParams>>> =
+    once_cell::sync::Lazy::new(get_seviri_params);
 
 pub fn radiance2tb(radiance: f64, wavelength: f64) -> f64 {
     blackbody_rad2temp(wavelength, radiance)
@@ -70,6 +122,104 @@ pub fn seviri_tb2radiance(tb: f64, central_wavenumber: f64, alpha: f64, beta: f6
 
     let vc = central_wavenumber;
     c1 * vc.powi(3) / ((c2 * vc / (alpha * tb + beta)).exp() - 1.0)
+}
+
+pub struct RadTbConverter {
+    pub platform_name: String,
+    pub instrument: String,
+    pub band: String,
+    pub wavelength: Array1<f64>,
+    pub response: Array1<f64>,
+    pub central_wavelength: f64,
+    pub rsr_integral: f64,
+    pub detector: String,
+}
+
+impl RadTbConverter {
+    pub fn new(
+        platform_name: &str,
+        instrument: &str,
+        band: &str,
+        wavelength: Array1<f64>,
+        response: Array1<f64>,
+    ) -> Self {
+        let central_wavelength = crate::utils::get_central_wave(&wavelength, &response, 1.0);
+        let rsr_integral = trapezoid(&response, &wavelength);
+        RadTbConverter {
+            platform_name: platform_name.to_string(),
+            instrument: instrument.to_string(),
+            band: band.to_string(),
+            wavelength,
+            response,
+            central_wavelength,
+            rsr_integral,
+            detector: "det-1".to_string(),
+        }
+    }
+
+    pub fn with_detector(mut self, detector: &str) -> Self {
+        self.detector = detector.to_string();
+        self
+    }
+
+    pub fn tb2radiance(&self, tb: &Array1<f64>, normalized: bool) -> Array1<f64> {
+        tb.mapv(|t| {
+            let planck_vals: Array1<f64> = self.wavelength.mapv(|w| blackbody(w, t));
+            let product = &planck_vals * &self.response;
+            let integrated = trapezoid(&product, &self.wavelength);
+            if normalized && self.rsr_integral > 0.0 {
+                integrated / self.rsr_integral
+            } else {
+                integrated
+            }
+        })
+    }
+
+    pub fn radiance2tb(&self, rad: &Array1<f64>) -> Array1<f64> {
+        rad.mapv(|r| radiance2tb(r, self.central_wavelength * 1e-6))
+    }
+
+    pub fn make_tb2rad_lut(&self, tb_resolution: f64, normalized: bool) -> (Array1<f64>, Array1<f64>) {
+        let n = ((TB_MAX - TB_MIN) / tb_resolution).round() as usize + 1;
+        let mut lut_tb = Array1::zeros(n);
+        let mut lut_rad = Array1::zeros(n);
+        for i in 0..n {
+            let tb = TB_MIN + i as f64 * tb_resolution;
+            lut_tb[i] = tb;
+            lut_rad[i] = self.tb2radiance(&Array1::from_elem(1, tb), normalized)[0];
+        }
+        (lut_tb, lut_rad)
+    }
+}
+
+pub struct SeviriRadTbConverter {
+    pub platform_name: String,
+    pub band: String,
+    pub vc: f64,
+    pub alpha: f64,
+    pub beta: f64,
+}
+
+impl SeviriRadTbConverter {
+    pub fn new(platform_name: &str, band: &str) -> Option<Self> {
+        let seviri = SEVIRI.get(band)?;
+        let params = seviri.get(platform_name)?;
+        Some(SeviriRadTbConverter {
+            platform_name: platform_name.to_string(),
+            band: band.to_string(),
+            vc: params.0 * 100.0,
+            alpha: params.1,
+            beta: params.2,
+        })
+    }
+
+    pub fn radiance2tb(&self, rad: f64) -> f64 {
+        seviri_radiance2tb(rad, self.vc, self.alpha, self.beta)
+    }
+
+    pub fn tb2radiance(&self, tb: f64) -> f64 {
+        seviri_tb2radiance(tb, self.vc, self.alpha, self.beta)
+    }
 }
 
 #[cfg(test)]

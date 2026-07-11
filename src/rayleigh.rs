@@ -197,6 +197,10 @@ pub fn normalize_sensor(platform_name: &str, sensor: &str) -> String {
     instr.replace("/", "")
 }
 
+fn normalize_atmosphere(name: &str) -> String {
+    name.replace(" ", "_").replace("-", "_")
+}
+
 pub struct RayleighConfigBase {
     pub aerosol_type: String,
     pub atm_type: String,
@@ -208,7 +212,8 @@ impl RayleighConfigBase {
     pub fn new(aerosol_type: &str, atm_type: &str) -> Self {
         let config = get_config(None);
 
-        let atm_valid = ATMOSPHERES.iter().any(|(name, _)| *name == atm_type);
+        let atm_normalized = normalize_atmosphere(atm_type);
+        let atm_valid = ATMOSPHERES.iter().any(|(name, _)| normalize_atmosphere(name) == atm_normalized);
         if !atm_valid {
             panic!(
                 "Atmosphere type not supported! Need to be one of {:?}",
@@ -228,7 +233,7 @@ impl RayleighConfigBase {
 
         RayleighConfigBase {
             aerosol_type: aerosol_type.to_string(),
-            atm_type: atm_type.to_string(),
+            atm_type: atm_normalized,
             do_download: config.download_from_internet,
             lutfiles_version_uptodate,
         }
@@ -407,10 +412,15 @@ impl Rayleigh {
         sun_zenith: &Array1<f64>,
         sat_zenith: &Array1<f64>,
         azidiff: &Array1<f64>,
-        _wvl_nm: f64,
+        wvl_nm: f64,
     ) -> Result<Array1<f64>, String> {
-        let (_azid_coord, satz_sec_coord, sunz_sec_coord) =
+        let (azid_coord, satz_sec_coord, sunz_sec_coord) =
             get_reflectance_lut_from_file(&self.reflectance_lut_filename)?;
+
+        let rayleigh_refl = read_reflectance_lut_4d(&self.reflectance_lut_filename)?;
+        let wvl_coord = read_wavelength_lut_coord(&self.reflectance_lut_filename)?;
+
+        let grid3 = get_wavelength_adjusted_lut(&rayleigh_refl, &wvl_coord, wvl_nm);
 
         let n = sun_zenith.len();
         let mut result = Array1::zeros(n);
@@ -427,7 +437,15 @@ impl Rayleigh {
             let sunzsec = 1.0 / sz.to_radians().cos().max(0.0001);
             let satzsec = 1.0 / satz.to_radians().cos().max(0.0001);
 
-            result[i] = (sunzsec, azidiff[i], satzsec).0;
+            result[i] = trilinear_interpolate(
+                &grid3,
+                sunzsec,
+                azidiff[i],
+                satzsec,
+                &sunz_sec_coord,
+                &azid_coord,
+                &satz_sec_coord,
+            );
         }
 
         Ok(result)
@@ -483,6 +501,35 @@ fn read_lut_coord(root: &hdf5_pure::Group, name: &str) -> Result<Array1<f64>, St
         .read_f64()
         .map_err(|e| format!("Failed to read '{}': {}", name, e))?;
     Ok(Array1::from_vec(values))
+}
+
+pub fn read_reflectance_lut_4d(lut_filename: &Path) -> Result<Array4<f64>, String> {
+    let h5file = hdf5_pure::File::open(lut_filename)
+        .map_err(|e| format!("Failed to open LUT file: {}", e))?;
+    let root = h5file.root();
+    let ds = root
+        .dataset("reflectance")
+        .map_err(|e| format!("Dataset 'reflectance' not found: {}", e))?;
+    let shape = ds.shape().map_err(|e| format!("Failed to get shape: {}", e))?;
+
+    if shape.len() != 4 {
+        return Err(format!("Expected 4D reflectance, got {}D", shape.len()));
+    }
+    let (nw, ns, na, nt) = (shape[0] as usize, shape[1] as usize, shape[2] as usize, shape[3] as usize);
+    let values: Vec<f64> = ds
+        .read_f64()
+        .map_err(|e| format!("Failed to read reflectance: {}", e))?;
+
+    let arr = Array4::from_shape_vec((nw, ns, na, nt), values)
+        .map_err(|e| format!("Shape mismatch: {}", e))?;
+    Ok(arr)
+}
+
+pub fn read_wavelength_lut_coord(lut_filename: &Path) -> Result<Array1<f64>, String> {
+    let h5file = hdf5_pure::File::open(lut_filename)
+        .map_err(|e| format!("Failed to open LUT file: {}", e))?;
+    let root = h5file.root();
+    read_lut_coord(&root, "wavelengths")
 }
 
 pub fn check_and_download(dry_run: bool, aerosol_types: Option<&[String]>) {
