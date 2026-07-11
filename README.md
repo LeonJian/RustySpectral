@@ -421,7 +421,3 @@ src/
 cargo test
 # 113 tests, zero warnings
 ```
-
-## License
-
-MIT
