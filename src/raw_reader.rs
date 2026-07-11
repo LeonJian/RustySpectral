@@ -105,6 +105,6 @@ mod tests {
         let bandnames = vec!["VIS006".to_string()];
         let mut rsr = InstrumentRSR::new("VIS006", "Meteosat-10", &bandnames);
         rsr.get_options_from_config();
-        assert!(rsr.output_dir.to_string_lossy().len() > 0);
+        assert!(!rsr.output_dir.to_string_lossy().is_empty());
     }
 }

@@ -52,8 +52,9 @@ pub fn get_seviri_params() -> HashMap<&'static str, HashMap<&'static str, Seviri
     m
 }
 
-pub static SEVIRI: once_cell::sync::Lazy<HashMap<&'static str, HashMap<&'static str, SeviriParams>>> =
-    once_cell::sync::Lazy::new(get_seviri_params);
+pub static SEVIRI: once_cell::sync::Lazy<
+    HashMap<&'static str, HashMap<&'static str, SeviriParams>>,
+> = once_cell::sync::Lazy::new(get_seviri_params);
 
 pub fn radiance2tb(radiance: f64, wavelength: f64) -> f64 {
     blackbody_rad2temp(wavelength, radiance)
@@ -143,7 +144,11 @@ impl RadTbConverter {
         wavelength: Array1<f64>,
         response: Array1<f64>,
     ) -> Self {
-        let central_wavelength = crate::utils::get_central_wave(&wavelength, &response, &Array1::from_elem(wavelength.len(), 1.0));
+        let central_wavelength = crate::utils::get_central_wave(
+            &wavelength,
+            &response,
+            &Array1::from_elem(wavelength.len(), 1.0),
+        );
         let rsr_integral = trapezoid(&response, &wavelength);
         RadTbConverter {
             platform_name: platform_name.to_string(),
@@ -179,7 +184,11 @@ impl RadTbConverter {
         rad.mapv(|r| radiance2tb(r, self.central_wavelength * 1e-6))
     }
 
-    pub fn make_tb2rad_lut(&self, tb_resolution: f64, normalized: bool) -> (Array1<f64>, Array1<f64>) {
+    pub fn make_tb2rad_lut(
+        &self,
+        tb_resolution: f64,
+        normalized: bool,
+    ) -> (Array1<f64>, Array1<f64>) {
         let n = ((TB_MAX - TB_MIN) / tb_resolution).round() as usize + 1;
         let mut lut_tb = Array1::zeros(n);
         let mut lut_rad = Array1::zeros(n);
@@ -296,7 +305,7 @@ mod tests {
         let wvl = test_wavelength();
         let resp = test_response();
         let (lut_tb, lut_rad) = make_tb2rad_lut(&wvl, &resp, 0.1);
-        assert!(lut_tb.len() > 0);
+        assert!(!lut_tb.is_empty());
         assert_eq!(lut_tb.len(), lut_rad.len());
         for i in 1..lut_rad.len() {
             assert!(lut_rad[i] > lut_rad[i - 1]);

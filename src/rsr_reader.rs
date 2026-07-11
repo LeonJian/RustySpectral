@@ -114,7 +114,11 @@ impl RelativeSpectralResponse {
                 for (det_name, det_data) in detectors {
                     let (wavenumber, response) =
                         utils::convert2wavenumber_rsr(&det_data.wavelength, &det_data.response);
-                    let central_wn = get_central_wave(&wavenumber, &response, &Array1::from_elem(wavenumber.len(), 1.0));
+                    let central_wn = get_central_wave(
+                        &wavenumber,
+                        &response,
+                        &Array1::from_elem(wavenumber.len(), 1.0),
+                    );
                     new_detectors.insert(
                         det_name.clone(),
                         RsrData {
@@ -337,8 +341,9 @@ fn read_detector_data(group: &hdf5_pure::Group) -> Option<RsrData> {
     let wvl_arr = Array1::from_vec(wavelength.clone());
     let resp_arr = Array1::from_vec(response.clone());
 
-    let central_wavelength = attr_to_f64(&band_attrs, "central_wavelength")
-        .unwrap_or_else(|| get_central_wave(&wvl_arr, &resp_arr, &Array1::from_elem(wvl_arr.len(), 1.0)));
+    let central_wavelength = attr_to_f64(&band_attrs, "central_wavelength").unwrap_or_else(|| {
+        get_central_wave(&wvl_arr, &resp_arr, &Array1::from_elem(wvl_arr.len(), 1.0))
+    });
 
     Some(RsrData {
         wavelength: Array1::from_vec(wavelength),

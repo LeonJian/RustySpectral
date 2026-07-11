@@ -87,8 +87,8 @@ pub fn download_luts(aerosol_types: Option<&[String]>, dry_run: bool) -> io::Res
         extract_tarball(&tarball_path, &lut_dir)?;
 
         if let Some(ver_info) = ATM_CORRECTION_LUT_VERSION.get(aerosol_type.as_str()) {
-            let version_file = lut_dir.join(&ver_info.filename);
-            fs::write(&version_file, &ver_info.version)?;
+            let version_file = lut_dir.join(ver_info.filename);
+            fs::write(&version_file, ver_info.version)?;
         }
     }
 
@@ -104,7 +104,7 @@ fn download_file(url: &str, dest: &Path) -> io::Result<()> {
     let resp = agent
         .get(url)
         .call()
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("HTTP request failed: {}", e)))?;
+        .map_err(|e| io::Error::other(format!("HTTP request failed: {}", e)))?;
 
     let mut body = Vec::new();
     resp.into_body().as_reader().read_to_end(&mut body)?;

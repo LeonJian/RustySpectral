@@ -34,14 +34,14 @@ fn default_data_dir() -> PathBuf {
     if let Some(data_dir) = dirs::data_local_dir() {
         data_dir.join("pyspectral")
     } else {
-        PathBuf::from("/tmp/pyspectral")
+        std::env::temp_dir().join("pyspectral")
     }
 }
 
 fn expand_home(path: &str) -> PathBuf {
-    if path.starts_with("~/") {
+    if let Some(stripped) = path.strip_prefix("~/") {
         if let Some(home) = dirs::home_dir() {
-            return home.join(&path[2..]);
+            return home.join(stripped);
         }
     }
     PathBuf::from(path)
@@ -72,18 +72,18 @@ pub fn get_config(config_file: Option<&Path>) -> Config {
     let mapping = raw.as_mapping().cloned().unwrap_or_default();
 
     let download_from_internet = mapping
-        .get(&Value::String("download_from_internet".into()))
+        .get(Value::String("download_from_internet".into()))
         .and_then(|v| v.as_bool())
         .unwrap_or(true);
 
     let rsr_dir = mapping
-        .get(&Value::String("rsr_dir".into()))
+        .get(Value::String("rsr_dir".into()))
         .and_then(|v| v.as_str())
         .map(expand_home)
         .unwrap_or_else(default_data_dir);
 
     let rayleigh_dir = mapping
-        .get(&Value::String("rayleigh_dir".into()))
+        .get(Value::String("rayleigh_dir".into()))
         .and_then(|v| v.as_str())
         .map(expand_home)
         .unwrap_or_else(default_data_dir);

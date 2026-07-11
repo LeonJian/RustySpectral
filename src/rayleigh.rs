@@ -133,6 +133,7 @@ fn find_interval_index(coords: &Array1<f64>, value: f64) -> usize {
     (idx.saturating_sub(1)).min(coords.len() - 2)
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn rayleigh_interpolate_by_angles(
     sun_zenith: &Array1<f64>,
     sat_zenith: &Array1<f64>,
@@ -213,7 +214,9 @@ impl RayleighConfigBase {
         let config = get_config(None);
 
         let atm_normalized = normalize_atmosphere(atm_type);
-        let atm_valid = ATMOSPHERES.iter().any(|(name, _)| normalize_atmosphere(name) == atm_normalized);
+        let atm_valid = ATMOSPHERES
+            .iter()
+            .any(|(name, _)| normalize_atmosphere(name) == atm_normalized);
         if !atm_valid {
             panic!(
                 "Atmosphere type not supported! Need to be one of {:?}",
@@ -248,7 +251,7 @@ impl RayleighConfigBase {
             None => return false,
         };
 
-        let version_file = lut_dir.join(&ver_info.filename);
+        let version_file = lut_dir.join(ver_info.filename);
         if !version_file.exists() {
             return false;
         }
@@ -471,6 +474,7 @@ impl Rayleigh {
     }
 }
 
+#[allow(clippy::type_complexity)]
 pub fn get_reflectance_lut_from_file(
     lut_filename: &Path,
 ) -> Result<(Array1<f64>, Array1<f64>, Array1<f64>), String> {
@@ -510,12 +514,19 @@ pub fn read_reflectance_lut_4d(lut_filename: &Path) -> Result<Array4<f64>, Strin
     let ds = root
         .dataset("reflectance")
         .map_err(|e| format!("Dataset 'reflectance' not found: {}", e))?;
-    let shape = ds.shape().map_err(|e| format!("Failed to get shape: {}", e))?;
+    let shape = ds
+        .shape()
+        .map_err(|e| format!("Failed to get shape: {}", e))?;
 
     if shape.len() != 4 {
         return Err(format!("Expected 4D reflectance, got {}D", shape.len()));
     }
-    let (nw, ns, na, nt) = (shape[0] as usize, shape[1] as usize, shape[2] as usize, shape[3] as usize);
+    let (nw, ns, na, nt) = (
+        shape[0] as usize,
+        shape[1] as usize,
+        shape[2] as usize,
+        shape[3] as usize,
+    );
     let values: Vec<f64> = ds
         .read_f64()
         .map_err(|e| format!("Failed to read reflectance: {}", e))?;

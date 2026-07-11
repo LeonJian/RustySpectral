@@ -38,7 +38,11 @@ impl ReflectanceCalculator {
 
     pub fn with_rsr(mut self, wavelength: Array1<f64>, response: Array1<f64>) -> Self {
         self.rsr_integral = trapezoid(&response, &wavelength);
-        self.central_wavelength = crate::utils::get_central_wave(&wavelength, &response, &Array1::from_elem(wavelength.len(), 1.0));
+        self.central_wavelength = crate::utils::get_central_wave(
+            &wavelength,
+            &response,
+            &Array1::from_elem(wavelength.len(), 1.0),
+        );
         self.wavelength = wavelength;
         self.response = response;
         self
@@ -71,7 +75,7 @@ impl ReflectanceCalculator {
     }
 
     pub fn tb2radiance(&self, tb: &Array1<f64>) -> Array1<f64> {
-        if self.wavelength.len() > 0 && self.rsr_integral > 0.0 {
+        if !self.wavelength.is_empty() && self.rsr_integral > 0.0 {
             tb.mapv(|t| {
                 let planck_vals: Array1<f64> = self.wavelength.mapv(|w| blackbody(w, t));
                 let product = &planck_vals * &self.response;
@@ -156,7 +160,11 @@ impl ReflectanceCalculator {
         result
     }
 
-    pub fn emissive_part(&self, tb_nir: &Array1<f64>, _tb_thermal: Option<&Array1<f64>>) -> Array1<f64> {
+    pub fn emissive_part(
+        &self,
+        tb_nir: &Array1<f64>,
+        _tb_thermal: Option<&Array1<f64>>,
+    ) -> Array1<f64> {
         self.tb2radiance(tb_nir)
     }
 
@@ -296,7 +304,7 @@ mod tests {
         let tb_nir = arr1(&[290.0]);
         let tb_thermal = arr1(&[280.0]);
         let refl = calc.reflectance_from_tbs(&sunz, &tb_nir, &tb_thermal, None);
-        assert!(refl[0] >= 0.0 && refl[0] <= 1.0);
+        assert!((0.0..=1.0).contains(&refl[0]));
     }
 
     #[test]
@@ -311,7 +319,7 @@ mod tests {
         let tb_thermal = arr1(&[280.0]);
         let tb_co2 = arr1(&[270.0]);
         let refl = calc.reflectance_from_tbs(&sunz, &tb_nir, &tb_thermal, Some(&tb_co2));
-        assert!(refl[0] >= 0.0 && refl[0] <= 1.0);
+        assert!((0.0..=1.0).contains(&refl[0]));
     }
 
     #[test]
@@ -353,7 +361,7 @@ mod tests {
         let tb_nir = arr1(&[290.0]);
         let tb_thermal = arr1(&[260.0]);
         let refl = calc.reflectance_from_tbs(&sunz, &tb_nir, &tb_thermal, None);
-        assert!(refl[0] >= 0.0 && refl[0] <= 1.0);
+        assert!((0.0..=1.0).contains(&refl[0]));
     }
 
     #[test]
@@ -388,7 +396,7 @@ mod tests {
         let refl = calc.reflectance_from_tbs(&sunz, &tb_nir, &tb_thermal, None);
         assert_eq!(refl.len(), 3);
         for &r in refl.iter() {
-            assert!(r >= 0.0 && r <= 1.0);
+            assert!((0.0..=1.0).contains(&r));
         }
     }
 }
