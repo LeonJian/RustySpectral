@@ -5,7 +5,6 @@ spectral response analysis, solar irradiance computation, and atmospheric correc
 for visible and infrared satellite bands.
 
 [![Crates.io](https://img.shields.io/crates/v/rustyspectral)](https://crates.io/crates/rustyspectral)
-[![License](https://img.shields.io/crates/l/rustyspectral)](LICENSE)
 
 ## Overview
 
