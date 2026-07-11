@@ -69,15 +69,18 @@ fn test_normalize_sensor_unknown_platform_uses_sensor() {
 
 #[test]
 fn test_aerosol_types_list() {
-    assert_eq!(AEROSOL_TYPES.len(), 11);
-    assert!(AEROSOL_TYPES.contains(&"marine_clean_aerosol"));
-    assert!(AEROSOL_TYPES.contains(&"desert_aerosol"));
-    assert!(AEROSOL_TYPES.contains(&"rayleigh_only"));
+    let types = rustyspectral::utils::AEROSOL_TYPES;
+    assert_eq!(types.len(), 11);
+    assert!(types.contains(&"marine_clean_aerosol"));
+    assert!(types.contains(&"desert_aerosol"));
+    assert!(types.contains(&"rayleigh_only"));
 }
 
 #[test]
 fn test_atmospheres_list() {
-    assert_eq!(ATMOSPHERES.len(), 6);
-    assert!(ATMOSPHERES.contains(&"midlatitude_summer"));
-    assert!(ATMOSPHERES.contains(&"us_standard"));
+    let atms = rustyspectral::utils::ATMOSPHERES;
+    assert_eq!(atms.len(), 6);
+    let names: Vec<&str> = atms.iter().map(|(n, _)| *n).collect();
+    assert!(names.contains(&"midlatitude_summer"));
+    assert!(names.contains(&"us_standard"));
 }

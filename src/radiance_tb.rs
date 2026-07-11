@@ -1,6 +1,6 @@
 use ndarray::Array1;
 
-use crate::blackbody::{blackbody, blackbody_rad2temp, H_PLANCK, K_BOLTZMANN, C_SPEED};
+use crate::blackbody::{blackbody, blackbody_rad2temp, C_SPEED, H_PLANCK, K_BOLTZMANN};
 use crate::utils::trapezoid;
 
 pub fn radiance2tb(radiance: f64, wavelength: f64) -> f64 {
@@ -17,7 +17,11 @@ pub fn tb2radiance_simple(tb: f64, wavelength: &Array1<f64>, response: &Array1<f
     trapezoid(&product, wavelength)
 }
 
-pub fn tb2radiance_array(tb: &Array1<f64>, wavelength: &Array1<f64>, response: &Array1<f64>) -> Array1<f64> {
+pub fn tb2radiance_array(
+    tb: &Array1<f64>,
+    wavelength: &Array1<f64>,
+    response: &Array1<f64>,
+) -> Array1<f64> {
     tb.mapv(|t| tb2radiance_simple(t, wavelength, response))
 }
 
@@ -50,12 +54,7 @@ pub fn make_tb2rad_lut(
     (lut_tb, lut_rad)
 }
 
-pub fn seviri_radiance2tb(
-    radiance: f64,
-    central_wavenumber: f64,
-    alpha: f64,
-    beta: f64,
-) -> f64 {
+pub fn seviri_radiance2tb(radiance: f64, central_wavenumber: f64, alpha: f64, beta: f64) -> f64 {
     let c1 = 2.0 * H_PLANCK * C_SPEED * C_SPEED;
     let c2 = H_PLANCK * C_SPEED / K_BOLTZMANN;
 
@@ -65,12 +64,7 @@ pub fn seviri_radiance2tb(
     c2 * vc / (alpha * arg.ln()) - beta / alpha
 }
 
-pub fn seviri_tb2radiance(
-    tb: f64,
-    central_wavenumber: f64,
-    alpha: f64,
-    beta: f64,
-) -> f64 {
+pub fn seviri_tb2radiance(tb: f64, central_wavenumber: f64, alpha: f64, beta: f64) -> f64 {
     let c1 = 2.0 * H_PLANCK * C_SPEED * C_SPEED;
     let c2 = H_PLANCK * C_SPEED / K_BOLTZMANN;
 

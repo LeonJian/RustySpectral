@@ -50,7 +50,9 @@ fn test_detector_rsr_multi() {
     let resp2 = array![0.0, 1.0, 0.0_f64];
     let det2 = PerDetectorRsr::new("det-2".to_string(), wvl2, resp2);
 
-    let drsr = DetectorRsr { detectors: vec![det1, det2] };
+    let drsr = DetectorRsr {
+        detectors: vec![det1, det2],
+    };
     assert_eq!(drsr.detectors.len(), 2);
     assert_eq!(drsr.detectors[0].name, "det-1");
     assert_eq!(drsr.detectors[1].name, "det-2");

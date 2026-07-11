@@ -23,7 +23,8 @@ impl SolarIrradianceSpectrum {
         let mut wavelength = Vec::new();
         let mut irradiance = Vec::new();
 
-        let content = std::fs::read_to_string(filename).expect("Failed to read solar spectrum file");
+        let content =
+            std::fs::read_to_string(filename).expect("Failed to read solar spectrum file");
         for line in content.lines() {
             let line = line.trim();
             if line.is_empty() {
@@ -76,7 +77,10 @@ impl SolarIrradianceSpectrum {
         let (start, end) = match ival_wavelength {
             Some((s, e)) => (s, e),
             None => match self.wavespace {
-                WaveSpace::Wavelength => (self.wavelength[0], self.wavelength[self.wavelength.len() - 1]),
+                WaveSpace::Wavelength => (
+                    self.wavelength[0],
+                    self.wavelength[self.wavelength.len() - 1],
+                ),
                 WaveSpace::Wavenumber => {
                     if let Some(ref wn) = self.wavenumber {
                         (wn[0], wn[wn.len() - 1])
@@ -141,10 +145,7 @@ impl SolarIrradianceSpectrum {
         let ipol_w = self.ipol_wavelength.as_ref().unwrap();
         let ipol_i = self.ipol_irradiance.as_ref().unwrap();
 
-        let mask: Vec<bool> = ipol_w
-            .iter()
-            .map(|&x| x >= start && x <= end)
-            .collect();
+        let mask: Vec<bool> = ipol_w.iter().map(|&x| x >= start && x <= end).collect();
 
         let mut masked_wvl = Vec::new();
         let mut masked_irr = Vec::new();

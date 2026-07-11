@@ -7,7 +7,18 @@ edition = "2021"
 description = "Rust port of pyspectral: satellite sensor spectral response & solar spectrum analysis"
 
 [dependencies]
-ndarray = "0.16"
+ndarray = { version = "0.16", features = ["approx"] }
+serde = { version = "1", features = ["derive"] }
+serde_yaml = "0.9"
+hdf5-pure = { version = "0.21", features = ["ndarray", "deflate"] }
+ureq = "3"
+flate2 = "1"
+tar = "0.4"
+dirs = "6"
+log = "0.4"
+env_logger = "0.11"
+once_cell = "1"
 
 [dev-dependencies]
 approx = "0.5"
+tempfile = "3"

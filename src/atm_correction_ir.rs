@@ -53,7 +53,12 @@ impl AtmosphericalCorrection {
         }
     }
 
-    pub fn get_correction(&self, sat_zenith: &Array2<f64>, data: &Array2<f64>) -> Array2<f64> {
+    pub fn get_correction(
+        &self,
+        sat_zenith: &Array2<f64>,
+        _bandname: &str,
+        data: &Array2<f64>,
+    ) -> Array2<f64> {
         viewzen_corr(data, sat_zenith)
     }
 }

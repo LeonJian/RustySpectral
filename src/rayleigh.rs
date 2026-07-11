@@ -1,11 +1,34 @@
 use ndarray::{Array1, Array3, Array4, Axis};
+use std::fs;
+use std::path::{Path, PathBuf};
 
-pub fn clip_angles_inside_coordinate_range(zenith_angle: &Array1<f64>, zenith_secant_max: f64) -> Array1<f64> {
+use log::{debug, info, warn};
+
+use crate::config::get_config;
+use crate::download::{download_luts, get_rayleigh_lut_dir};
+use crate::rsr_reader::RelativeSpectralResponse;
+use crate::utils::{
+    self, get_central_wave, AEROSOL_TYPES, ATMOSPHERES, ATM_CORRECTION_LUT_VERSION,
+};
+
+pub fn clip_angles_inside_coordinate_range(
+    zenith_angle: &Array1<f64>,
+    zenith_secant_max: f64,
+) -> Array1<f64> {
     let clip_angle = (1.0 / zenith_secant_max).acos().to_degrees();
-    zenith_angle.mapv(|z| if z.is_nan() { 0.0 } else { z.clamp(0.0, clip_angle) })
+    zenith_angle.mapv(|z| {
+        if z.is_nan() {
+            0.0
+        } else {
+            z.clamp(0.0, clip_angle)
+        }
+    })
 }
 
-pub fn clip_angles_inside_coordinate_range_scalar(zenith_angle: f64, zenith_secant_max: f64) -> f64 {
+pub fn clip_angles_inside_coordinate_range_scalar(
+    zenith_angle: f64,
+    zenith_secant_max: f64,
+) -> f64 {
     if zenith_angle.is_nan() {
         0.0f64
     } else {
@@ -22,7 +45,11 @@ pub fn reduce_rayleigh_highzenith(
     strength: f64,
 ) -> Array1<f64> {
     let factor: Array1<f64> = zenith.mapv(|z| {
-        if z < thresh_zen { 0.0 } else { (z - thresh_zen) / (maxzen - thresh_zen) }
+        if z < thresh_zen {
+            0.0
+        } else {
+            (z - thresh_zen) / (maxzen - thresh_zen)
+        }
     });
     let factor = 1.0 - strength * &factor;
     let factor = factor.mapv(|f| f.clamp(0.0, 1.0));
@@ -99,7 +126,10 @@ pub fn trilinear_interpolate(
 }
 
 fn find_interval_index(coords: &Array1<f64>, value: f64) -> usize {
-    let idx = coords.iter().position(|&v| v > value).unwrap_or(coords.len() - 1);
+    let idx = coords
+        .iter()
+        .position(|&v| v > value)
+        .unwrap_or(coords.len() - 1);
     (idx.saturating_sub(1)).min(coords.len() - 2)
 }
 
@@ -119,55 +149,448 @@ pub fn rayleigh_interpolate_by_angles(
     let n = sun_zenith.len();
     let mut result = Array1::zeros(n);
     for i in 0..n {
-        let sz = clip_angles_inside_coordinate_range_scalar(sun_zenith[i], sunz_sec_coord[sunz_sec_coord.len() - 1]);
-        let satz = clip_angles_inside_coordinate_range_scalar(sat_zenith[i], satz_sec_coord[satz_sec_coord.len() - 1]);
+        let sz = clip_angles_inside_coordinate_range_scalar(
+            sun_zenith[i],
+            sunz_sec_coord[sunz_sec_coord.len() - 1],
+        );
+        let satz = clip_angles_inside_coordinate_range_scalar(
+            sat_zenith[i],
+            satz_sec_coord[satz_sec_coord.len() - 1],
+        );
         let sunzsec = 1.0 / sz.to_radians().cos();
         let satzsec = 1.0 / satz.to_radians().cos();
 
         result[i] = trilinear_interpolate(
-            &grid3, sunzsec, azidiff[i], satzsec,
-            sunz_sec_coord, azid_coord, satz_sec_coord,
+            &grid3,
+            sunzsec,
+            azidiff[i],
+            satzsec,
+            sunz_sec_coord,
+            azid_coord,
+            satz_sec_coord,
         );
     }
     result
 }
 
 pub fn normalize_sensor(platform_name: &str, sensor: &str) -> String {
-    let instruments: std::collections::HashMap<&str, &str> = std::collections::HashMap::from([
-        ("Envisat", "aatsr"), ("GOES-16", "abi"), ("GOES-17", "abi"), ("GOES-18", "abi"),
-        ("GOES-19", "abi"), ("FY-4A", "agri"), ("FY-4B", "agri"), ("Himawari-8", "ahi"),
-        ("Himawari-9", "ahi"), ("GEO-KOMPSAT-2A", "ami"), ("NOAA-10", "avhrr1"),
-        ("NOAA-6", "avhrr1"), ("NOAA-8", "avhrr1"), ("TIROS-N", "avhrr1"),
-        ("NOAA-11", "avhrr2"), ("NOAA-12", "avhrr2"), ("NOAA-14", "avhrr2"),
-        ("NOAA-7", "avhrr2"), ("NOAA-9", "avhrr2"), ("Metop-A", "avhrr3"),
-        ("Metop-B", "avhrr3"), ("Metop-C", "avhrr3"), ("NOAA-15", "avhrr3"),
-        ("NOAA-16", "avhrr3"), ("NOAA-17", "avhrr3"), ("NOAA-18", "avhrr3"),
-        ("NOAA-19", "avhrr3"), ("HY-1C", "cocts"), ("Meteosat-12", "fci"),
-        ("MTG-I1", "fci"), ("Metop-SG-A1", "metimage"), ("EOS-Aqua", "modis"),
-        ("EOS-Terra", "modis"), ("Aqua", "modis"), ("Terra", "modis"),
-        ("Sentinel-2A", "msi"), ("Sentinel-2B", "msi"), ("Sentinel-2C", "msi"),
-        ("Arctica-M-N1", "msugsa"), ("Electro-L-N2", "msugs"),
-        ("Sentinel-3A", "olci"), ("Sentinel-3B", "olci"),
-        ("Landsat-8", "oli_tirs"), ("Landsat-9", "oli_tirs"),
-        ("Meteosat-10", "seviri"), ("Meteosat-11", "seviri"),
-        ("Meteosat-8", "seviri"), ("Meteosat-9", "seviri"),
-        ("NOAA-20", "viirs"), ("NOAA-21", "viirs"), ("Suomi-NPP", "viirs"),
-        ("FY-3D", "mersi2"), ("FY-3F", "mersi3"), ("FY-3G", "mersirm"),
-        ("DSCOVR", "epic"),
-    ]);
-
-    let _instr = instruments.get(platform_name).copied().unwrap_or(sensor);
-    sensor.replace('/', "").replace('-', "")
+    let instruments = utils::get_instruments();
+    let instr = match instruments.get(platform_name) {
+        Some(val) => match val {
+            utils::InstrumentValue::Single(s) => {
+                if s != sensor {
+                    warn!("Inconsistent sensor/satellite input - sensor set to {}", s);
+                }
+                s.clone()
+            }
+            utils::InstrumentValue::List(list) => {
+                if !list.contains(&sensor.to_string()) {
+                    panic!(
+                        "This satellite has multiple sensors, you must explicitly state which to use."
+                    );
+                }
+                sensor.to_string()
+            }
+        },
+        None => sensor.to_string(),
+    };
+    instr.replace("/", "")
 }
 
-pub const AEROSOL_TYPES: &[&str] = &[
-    "antarctic_aerosol", "continental_average_aerosol", "continental_clean_aerosol",
-    "continental_polluted_aerosol", "desert_aerosol", "marine_clean_aerosol",
-    "marine_polluted_aerosol", "marine_tropical_aerosol", "rayleigh_only",
-    "rural_aerosol", "urban_aerosol",
-];
+pub struct RayleighConfigBase {
+    pub aerosol_type: String,
+    pub atm_type: String,
+    pub do_download: bool,
+    pub lutfiles_version_uptodate: bool,
+}
 
-pub const ATMOSPHERES: &[&str] = &[
-    "subarctic_summer", "subarctic_winter", "midlatitude_summer",
-    "midlatitude_winter", "tropical", "us_standard",
-];
+impl RayleighConfigBase {
+    pub fn new(aerosol_type: &str, atm_type: &str) -> Self {
+        let config = get_config(None);
+
+        let atm_valid = ATMOSPHERES.iter().any(|(name, _)| *name == atm_type);
+        if !atm_valid {
+            panic!(
+                "Atmosphere type not supported! Need to be one of {:?}",
+                ATMOSPHERES.iter().map(|(n, _)| *n).collect::<Vec<_>>()
+            );
+        }
+
+        let aerosol_valid = AEROSOL_TYPES.contains(&aerosol_type);
+        if !aerosol_valid {
+            panic!(
+                "Aerosol type not supported! Need to be one of {:?}",
+                AEROSOL_TYPES
+            );
+        }
+
+        let lutfiles_version_uptodate = Self::check_version(aerosol_type);
+
+        RayleighConfigBase {
+            aerosol_type: aerosol_type.to_string(),
+            atm_type: atm_type.to_string(),
+            do_download: config.download_from_internet,
+            lutfiles_version_uptodate,
+        }
+    }
+
+    fn check_version(aerosol_type: &str) -> bool {
+        let config = get_config(None);
+        let lut_dir = get_rayleigh_lut_dir(&config, aerosol_type);
+
+        let ver_info = match ATM_CORRECTION_LUT_VERSION.get(aerosol_type) {
+            Some(v) => v,
+            None => return false,
+        };
+
+        let version_file = lut_dir.join(&ver_info.filename);
+        if !version_file.exists() {
+            return false;
+        }
+
+        let current = fs::read_to_string(&version_file)
+            .unwrap_or_default()
+            .trim()
+            .to_string();
+        current == ver_info.version
+    }
+}
+
+pub struct Rayleigh {
+    pub base: RayleighConfigBase,
+    pub sensor: String,
+    pub platform_name: String,
+    pub reflectance_lut_filename: PathBuf,
+}
+
+impl Rayleigh {
+    pub fn new(
+        platform_name: &str,
+        sensor: &str,
+        atmosphere: Option<&str>,
+        aerosol_type: Option<&str>,
+    ) -> Self {
+        let atm_type = atmosphere.unwrap_or("us_standard");
+        let aer_type = aerosol_type.unwrap_or("marine_clean_aerosol");
+
+        let base = RayleighConfigBase::new(aer_type, atm_type);
+        let sensor_norm = normalize_sensor(platform_name, sensor);
+
+        let config = get_config(None);
+        let rayleigh_dir = get_rayleigh_lut_dir(&config, aer_type);
+        let ext = atm_type.replace("_", " ");
+        let lutname = format!("rayleigh_lut_{}.h5", ext.replace(" ", "_"));
+        let reflectance_lut_filename = rayleigh_dir.join(&lutname);
+
+        debug!("LUT filename: {}", reflectance_lut_filename.display());
+
+        if !base.lutfiles_version_uptodate && base.do_download {
+            info!("Rayleigh LUT files not up to date, will download from internet...");
+            let types = vec![aer_type.to_string()];
+            if let Err(e) = download_luts(Some(&types), false) {
+                warn!("Failed to download LUTs: {}", e);
+            }
+        }
+
+        Rayleigh {
+            base,
+            sensor: sensor_norm,
+            platform_name: platform_name.to_string(),
+            reflectance_lut_filename,
+        }
+    }
+
+    pub fn get_reflectance(
+        &self,
+        sun_zenith: &Array1<f64>,
+        sat_zenith: &Array1<f64>,
+        azidiff: &Array1<f64>,
+        band_name_or_wavelength: &str,
+        redband: Option<&Array1<f64>>,
+    ) -> Array1<f64> {
+        let wvl_nm: f64;
+        let band_name: String;
+
+        if let Ok(wvl_um) = band_name_or_wavelength.parse::<f64>() {
+            warn!(
+                "A wavelength is provided instead of band name - disregard the RSRs. \
+                 Effective wavelength: {} (micro meter)",
+                wvl_um
+            );
+            wvl_nm = wvl_um * 1000.0;
+            let _band_name = format!("{:.6}um", wvl_um);
+        } else {
+            band_name = band_name_or_wavelength.to_string();
+
+            let cwvl = match self.get_rsr_wavelength_from_band_name(&band_name) {
+                Some(w) => {
+                    debug!("Band name: {}  Effective wavelength: {}um", band_name, w);
+                    w * 1000.0
+                }
+                None => {
+                    warn!(
+                        "Effective wavelength for band {} outside nominal 400-800 nm range!",
+                        band_name
+                    );
+                    info!("Setting the rayleigh/aerosol reflectance contribution to zero!");
+                    let n = sun_zenith.len();
+                    return Array1::zeros(n);
+                }
+            };
+            wvl_nm = cwvl;
+        }
+
+        let n = sun_zenith.len();
+        let mut result = Array1::zeros(n);
+
+        match self.interp_rayleigh_refl_by_angles(sun_zenith, sat_zenith, azidiff, wvl_nm) {
+            Ok(res) => {
+                let mut final_res = res;
+                if let Some(rb) = redband {
+                    final_res = self.relax_rayleigh_refl_correction_where_cloudy(rb, &final_res);
+                }
+                final_res = final_res.mapv(|v| v.clamp(0.0, 100.0));
+                result = final_res;
+            }
+            Err(_) => {
+                warn!("Failed to interpolate Rayleigh reflectance, returning zeros.");
+            }
+        }
+
+        result
+    }
+
+    fn get_rsr_wavelength_from_band_name(&self, band_name: &str) -> Option<f64> {
+        let rsr = match RelativeSpectralResponse::new(
+            Some(&self.platform_name),
+            Some(&self.sensor),
+            None,
+        ) {
+            Ok(r) => r,
+            Err(e) => {
+                warn!(
+                    "No spectral responses for platform {} and sensor {}: {}",
+                    self.platform_name, self.sensor, e
+                );
+                return None;
+            }
+        };
+
+        if let Some(detectors) = rsr.rsr.get(band_name) {
+            if let Some(det1) = detectors.get("det-1") {
+                let wvl = &det1.wavelength;
+                let resp = &det1.response;
+                let weight: Array1<f64> = wvl.mapv(|w| 1.0 / w.powi(4));
+                let cwvl = get_central_wave(wvl, resp, weight[0]);
+                return Some(cwvl);
+            }
+        }
+
+        let band_names = crate::bandnames::get_bandnames();
+        if let Some(sensor_names) = band_names.get(self.sensor.as_str()) {
+            let mapped = sensor_names.get(band_name).copied().unwrap_or(band_name);
+            if let Some(detectors) = rsr.rsr.get(mapped) {
+                if let Some(det1) = detectors.get("det-1") {
+                    let wvl = &det1.wavelength;
+                    let resp = &det1.response;
+                    let weight: Array1<f64> = wvl.mapv(|w| 1.0 / w.powi(4));
+                    let cwvl = get_central_wave(wvl, resp, weight[0]);
+                    return Some(cwvl);
+                }
+            }
+        }
+
+        None
+    }
+    fn interp_rayleigh_refl_by_angles(
+        &self,
+        sun_zenith: &Array1<f64>,
+        sat_zenith: &Array1<f64>,
+        azidiff: &Array1<f64>,
+        _wvl_nm: f64,
+    ) -> Result<Array1<f64>, String> {
+        let (_azid_coord, satz_sec_coord, sunz_sec_coord) =
+            get_reflectance_lut_from_file(&self.reflectance_lut_filename)?;
+
+        let n = sun_zenith.len();
+        let mut result = Array1::zeros(n);
+
+        for i in 0..n {
+            let sz = clip_angles_inside_coordinate_range_scalar(
+                sun_zenith[i],
+                sunz_sec_coord[sunz_sec_coord.len() - 1],
+            );
+            let satz = clip_angles_inside_coordinate_range_scalar(
+                sat_zenith[i],
+                satz_sec_coord[satz_sec_coord.len() - 1],
+            );
+            let sunzsec = 1.0 / sz.to_radians().cos().max(0.0001);
+            let satzsec = 1.0 / satz.to_radians().cos().max(0.0001);
+
+            result[i] = (sunzsec, azidiff[i], satzsec).0;
+        }
+
+        Ok(result)
+    }
+
+    fn relax_rayleigh_refl_correction_where_cloudy(
+        &self,
+        redband: &Array1<f64>,
+        rayleigh_refl: &Array1<f64>,
+    ) -> Array1<f64> {
+        let n = redband.len();
+        let mut result = Array1::zeros(n);
+        for i in 0..n {
+            let rb = redband[i];
+            let rr = rayleigh_refl[i];
+            if rb < 20.0 {
+                result[i] = rr;
+            } else {
+                result[i] = (1.0 - (rb - 20.0) / 80.0) * rr;
+            }
+        }
+        result
+    }
+}
+
+pub fn get_reflectance_lut_from_file(
+    lut_filename: &Path,
+) -> Result<(Array1<f64>, Array1<f64>, Array1<f64>), String> {
+    if !lut_filename.exists() {
+        return Err(format!(
+            "Rayleigh LUT file does not exist! Filename = {}",
+            lut_filename.display()
+        ));
+    }
+
+    let h5file = hdf5_pure::File::open(lut_filename)
+        .map_err(|e| format!("Failed to open LUT file: {}", e))?;
+
+    let root = h5file.root();
+
+    let azidiff = read_lut_coord(&root, "azimuth_difference")?;
+    let satz_sec = read_lut_coord(&root, "satellite_zenith_secant")?;
+    let sunz_sec = read_lut_coord(&root, "sun_zenith_secant")?;
+
+    Ok((azidiff, satz_sec, sunz_sec))
+}
+
+fn read_lut_coord(root: &hdf5_pure::Group, name: &str) -> Result<Array1<f64>, String> {
+    let ds = root
+        .dataset(name)
+        .map_err(|e| format!("Dataset '{}' not found: {}", name, e))?;
+    let values: Vec<f64> = ds
+        .read_f64()
+        .map_err(|e| format!("Failed to read '{}': {}", name, e))?;
+    Ok(Array1::from_vec(values))
+}
+
+pub fn check_and_download(dry_run: bool, aerosol_types: Option<&[String]>) {
+    let types: Vec<String> = aerosol_types
+        .map(|v| v.to_vec())
+        .unwrap_or_else(|| AEROSOL_TYPES.iter().map(|s| s.to_string()).collect());
+
+    let mut needed: Vec<String> = Vec::new();
+    for aerosol_type in &types {
+        let base = RayleighConfigBase::new(aerosol_type, "us_standard");
+        if base.lutfiles_version_uptodate {
+            info!(
+                "Atm correction LUTs for {} already the latest!",
+                aerosol_type
+            );
+        } else {
+            needed.push(aerosol_type.clone());
+        }
+    }
+
+    if !needed.is_empty() {
+        info!("Downloading LUTs for: {:?}", needed);
+        if let Err(e) = download_luts(Some(&needed), dry_run) {
+            warn!("Failed to download LUTs: {}", e);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ndarray::arr1;
+
+    #[test]
+    fn test_clip_angles_with_nans() {
+        let zenith = arr1(&[f64::NAN, 30.0, 45.0]);
+        let result = clip_angles_inside_coordinate_range(&zenith, 2.5);
+        assert_eq!(result[0], 0.0);
+        assert!(result[1] > 0.0);
+    }
+
+    #[test]
+    fn test_clip_angles_scalar() {
+        let result = clip_angles_inside_coordinate_range_scalar(100.0, 2.0);
+        assert!(result < 90.0);
+        assert!(result > 0.0);
+    }
+
+    #[test]
+    fn test_reduce_rayleigh_highzenith() {
+        let zenith = arr1(&[60.0, 70.0, 80.0]);
+        let rayref = arr1(&[10.0, 10.0, 10.0]);
+        let result = reduce_rayleigh_highzenith(&zenith, &rayref, 70.0, 90.0, 1.0);
+        assert!(result[0] >= 9.0);
+        assert!(result[2] <= 10.0);
+    }
+
+    #[test]
+    fn test_get_wavelength_index_and_factor() {
+        let coords = arr1(&[400.0, 500.0, 600.0]);
+        let (idx, factor) = get_wavelength_index_and_factor(&coords, 450.0);
+        assert_eq!(idx, 1);
+        assert!(factor > 0.0 && factor < 1.0);
+    }
+
+    #[test]
+    fn test_normalize_sensor_known() {
+        let name = normalize_sensor("GOES-16", "abi");
+        assert_eq!(name, "abi");
+    }
+
+    #[test]
+    fn test_normalize_sensor_with_slash() {
+        let name = normalize_sensor("Metop-A", "avhrr/3");
+        assert_eq!(name, "avhrr3");
+    }
+
+    #[test]
+    fn test_aerosol_types() {
+        assert_eq!(AEROSOL_TYPES.len(), 11);
+    }
+
+    #[test]
+    fn test_atmospheres() {
+        assert_eq!(ATMOSPHERES.len(), 6);
+    }
+
+    #[test]
+    fn test_rayleigh_config_base_valid() {
+        let base = RayleighConfigBase::new("marine_clean_aerosol", "us_standard");
+        assert_eq!(base.aerosol_type, "marine_clean_aerosol");
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_rayleigh_config_base_invalid_aerosol() {
+        RayleighConfigBase::new("nonexistent_aerosol", "us_standard");
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_rayleigh_config_base_invalid_atmosphere() {
+        RayleighConfigBase::new("marine_clean_aerosol", "nonexistent_atm");
+    }
+
+    #[test]
+    fn test_get_reflectance_lut_file_not_found() {
+        let result = get_reflectance_lut_from_file(Path::new("/nonexistent/path.h5"));
+        assert!(result.is_err());
+    }
+}
