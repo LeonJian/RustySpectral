@@ -22,7 +22,7 @@ pub struct PerDetectorRsr {
 
 impl PerDetectorRsr {
     pub fn new(name: String, wavelength: Array1<f64>, response: Array1<f64>) -> Self {
-        let central_wavelength = get_central_wave(&wavelength, &response, 1.0);
+        let central_wavelength = get_central_wave(&wavelength, &response, &ndarray::Array1::from_elem(wavelength.len(), 1.0));
         PerDetectorRsr {
             name,
             wavelength,
@@ -35,7 +35,7 @@ impl PerDetectorRsr {
 
 impl Rsr {
     pub fn new(wavelength: Array1<f64>, response: Array1<f64>) -> Self {
-        let central_wavelength = get_central_wave(&wavelength, &response, 1.0);
+        let central_wavelength = get_central_wave(&wavelength, &response, &Array1::from_elem(wavelength.len(), 1.0));
         Rsr {
             wavelength,
             response,

@@ -386,7 +386,7 @@ impl Rayleigh {
                 let wvl = &det1.wavelength;
                 let resp = &det1.response;
                 let weight: Array1<f64> = wvl.mapv(|w| 1.0 / w.powi(4));
-                let cwvl = get_central_wave(wvl, resp, weight[0]);
+                let cwvl = get_central_wave(wvl, resp, &weight);
                 return Some(cwvl);
             }
         }
@@ -399,7 +399,7 @@ impl Rayleigh {
                     let wvl = &det1.wavelength;
                     let resp = &det1.response;
                     let weight: Array1<f64> = wvl.mapv(|w| 1.0 / w.powi(4));
-                    let cwvl = get_central_wave(wvl, resp, weight[0]);
+                    let cwvl = get_central_wave(wvl, resp, &weight);
                     return Some(cwvl);
                 }
             }

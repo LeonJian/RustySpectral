@@ -14,7 +14,7 @@ pub fn trapezoid(y: &Array1<f64>, x: &Array1<f64>) -> f64 {
     0.5 * sum
 }
 
-pub fn get_central_wave(wav: &Array1<f64>, resp: &Array1<f64>, weight: f64) -> f64 {
+pub fn get_central_wave(wav: &Array1<f64>, resp: &Array1<f64>, weight: &Array1<f64>) -> f64 {
     let numerator = trapezoid(&(resp * wav * weight), wav);
     let denominator = trapezoid(&(resp * weight), wav);
     if denominator == 0.0 {
@@ -129,7 +129,7 @@ pub fn get_bounds_integrated_energy(
 }
 
 pub fn get_wave_range(wvl: &Array1<f64>, resp: &Array1<f64>, threshold: f64) -> (f64, f64, f64) {
-    let cwl = get_central_wave(wvl, resp, 1.0);
+    let cwl = get_central_wave(wvl, resp, &Array1::from_elem(wvl.len(), 1.0));
 
     let pts: Vec<usize> = resp
         .iter()
@@ -296,6 +296,7 @@ pub fn get_instruments() -> HashMap<&'static str, InstrumentValue> {
     s!("Suomi-NPP", "viirs");
     l!("FY-3A", "virr", "mersi-1");
     l!("FY-3B", "virr", "mersi-1");
+    l!("FY-3C", "virr", "mersi-1");
     s!("FY-3D", "mersi-2");
     s!("FY-3F", "mersi-3");
     s!("FY-3G", "mersi-rm");
@@ -559,7 +560,7 @@ mod tests {
     #[test]
     fn test_central_wavelength() {
         let (wvl, resp) = test_rsr_data();
-        let cw = get_central_wave(&wvl, &resp, 1.0);
+        let cw = get_central_wave(&wvl, &resp, &Array1::from_elem(wvl.len(), 1.0));
         approx::assert_abs_diff_eq!(cw, 3.780_281_935, epsilon = 1e-6);
     }
 

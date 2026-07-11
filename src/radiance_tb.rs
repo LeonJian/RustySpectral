@@ -143,7 +143,7 @@ impl RadTbConverter {
         wavelength: Array1<f64>,
         response: Array1<f64>,
     ) -> Self {
-        let central_wavelength = crate::utils::get_central_wave(&wavelength, &response, 1.0);
+        let central_wavelength = crate::utils::get_central_wave(&wavelength, &response, &Array1::from_elem(wavelength.len(), 1.0));
         let rsr_integral = trapezoid(&response, &wavelength);
         RadTbConverter {
             platform_name: platform_name.to_string(),

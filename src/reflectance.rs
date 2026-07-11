@@ -38,7 +38,7 @@ impl ReflectanceCalculator {
 
     pub fn with_rsr(mut self, wavelength: Array1<f64>, response: Array1<f64>) -> Self {
         self.rsr_integral = trapezoid(&response, &wavelength);
-        self.central_wavelength = crate::utils::get_central_wave(&wavelength, &response, 1.0);
+        self.central_wavelength = crate::utils::get_central_wave(&wavelength, &response, &Array1::from_elem(wavelength.len(), 1.0));
         self.wavelength = wavelength;
         self.response = response;
         self
