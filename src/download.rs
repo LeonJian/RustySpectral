@@ -146,6 +146,56 @@ mod tests {
     }
 
     #[test]
+    fn test_download_luts_specific_type_dry_run() {
+        let types: Vec<String> = vec!["marine_clean_aerosol".to_string()];
+        let result = download_luts(Some(&types), true);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_lut_urls_are_valid_http() {
+        for (_key, url) in HTTPS_RAYLEIGH_LUTS.iter() {
+            assert!(
+                url.starts_with("https://"),
+                "URL missing https:// scheme: {}",
+                url
+            );
+            assert!(
+                url.contains("zenodo.org/records/"),
+                "URL missing zenodo.org host: {}",
+                url
+            );
+            assert!(
+                url.ends_with(".tgz"),
+                "URL should end with .tgz: {}",
+                url
+            );
+        }
+    }
+
+    #[test]
+    fn test_marine_clean_aerosol_url() {
+        let url = HTTPS_RAYLEIGH_LUTS
+            .get("marine_clean_aerosol")
+            .expect("marine_clean_aerosol should exist");
+        assert_eq!(
+            url.as_str(),
+            "https://zenodo.org/records/19372152/files/pyspectral_atm_correction_lut_mca.tgz"
+        );
+    }
+
+    #[test]
+    fn test_all_aerosol_types_have_urls() {
+        for aerosol_type in AEROSOL_TYPES {
+            assert!(
+                HTTPS_RAYLEIGH_LUTS.contains_key(*aerosol_type),
+                "AEROSOL_TYPES contains '{}' but HTTPS_RAYLEIGH_LUTS does not",
+                aerosol_type
+            );
+        }
+    }
+
+    #[test]
     fn test_get_rayleigh_lut_dir() {
         let config = Config {
             rayleigh_dir: PathBuf::from("/test/rayleigh"),

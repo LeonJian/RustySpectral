@@ -392,59 +392,57 @@ pub static ATM_CORRECTION_LUT_VERSION: once_cell::sync::Lazy<
     HashMap<&'static str, AtmCorrectionVersion>,
 > = once_cell::sync::Lazy::new(get_atm_correction_lut_version);
 
-pub fn get_https_rayleigh_luts() -> HashMap<&'static str, &'static str> {
+pub fn get_https_rayleigh_luts() -> HashMap<&'static str, String> {
     let mut m = HashMap::new();
     let base = "https://zenodo.org/records/";
     m.insert(
         "antarctic_aerosol",
-        "19372152/files/pyspectral_atm_correction_lut_aa.tgz",
+        format!("{base}19372152/files/pyspectral_atm_correction_lut_aa.tgz"),
     );
     m.insert(
         "continental_average_aerosol",
-        "19372152/files/pyspectral_atm_correction_lut_caa.tgz",
+        format!("{base}19372152/files/pyspectral_atm_correction_lut_caa.tgz"),
     );
     m.insert(
         "continental_clean_aerosol",
-        "19372152/files/pyspectral_atm_correction_lut_cca.tgz",
+        format!("{base}19372152/files/pyspectral_atm_correction_lut_cca.tgz"),
     );
     m.insert(
         "continental_polluted_aerosol",
-        "19372152/files/pyspectral_atm_correction_lut_cpa.tgz",
+        format!("{base}19372152/files/pyspectral_atm_correction_lut_cpa.tgz"),
     );
     m.insert(
         "desert_aerosol",
-        "19372152/files/pyspectral_atm_correction_lut_da.tgz",
+        format!("{base}19372152/files/pyspectral_atm_correction_lut_da.tgz"),
     );
     m.insert(
         "marine_clean_aerosol",
-        "19372152/files/pyspectral_atm_correction_lut_mca.tgz",
+        format!("{base}19372152/files/pyspectral_atm_correction_lut_mca.tgz"),
     );
     m.insert(
         "marine_polluted_aerosol",
-        "19372152/files/pyspectral_atm_correction_lut_mpa.tgz",
+        format!("{base}19372152/files/pyspectral_atm_correction_lut_mpa.tgz"),
     );
     m.insert(
         "marine_tropical_aerosol",
-        "19372152/files/pyspectral_atm_correction_lut_mta.tgz",
+        format!("{base}19372152/files/pyspectral_atm_correction_lut_mta.tgz"),
     );
     m.insert(
         "rural_aerosol",
-        "19372152/files/pyspectral_atm_correction_lut_ra.tgz",
+        format!("{base}19372152/files/pyspectral_atm_correction_lut_ra.tgz"),
     );
     m.insert(
         "urban_aerosol",
-        "19372152/files/pyspectral_atm_correction_lut_ua.tgz",
+        format!("{base}19372152/files/pyspectral_atm_correction_lut_ua.tgz"),
     );
     m.insert(
         "rayleigh_only",
-        "19372152/files/pyspectral_atm_correction_lut_ro.tgz",
+        format!("{base}19372152/files/pyspectral_atm_correction_lut_ro.tgz"),
     );
-
-    let _ = base;
     m
 }
 
-pub static HTTPS_RAYLEIGH_LUTS: once_cell::sync::Lazy<HashMap<&'static str, &'static str>> =
+pub static HTTPS_RAYLEIGH_LUTS: once_cell::sync::Lazy<HashMap<&'static str, String>> =
     once_cell::sync::Lazy::new(get_https_rayleigh_luts);
 
 #[derive(Debug, Clone)]
@@ -515,6 +513,81 @@ mod tests {
     fn test_https_rayleigh_luts_entries() {
         let m = get_https_rayleigh_luts();
         assert_eq!(m.len(), 11);
+
+        let expected: &[(&str, &str)] = &[
+            (
+                "antarctic_aerosol",
+                "https://zenodo.org/records/19372152/files/pyspectral_atm_correction_lut_aa.tgz",
+            ),
+            (
+                "continental_average_aerosol",
+                "https://zenodo.org/records/19372152/files/pyspectral_atm_correction_lut_caa.tgz",
+            ),
+            (
+                "continental_clean_aerosol",
+                "https://zenodo.org/records/19372152/files/pyspectral_atm_correction_lut_cca.tgz",
+            ),
+            (
+                "continental_polluted_aerosol",
+                "https://zenodo.org/records/19372152/files/pyspectral_atm_correction_lut_cpa.tgz",
+            ),
+            (
+                "desert_aerosol",
+                "https://zenodo.org/records/19372152/files/pyspectral_atm_correction_lut_da.tgz",
+            ),
+            (
+                "marine_clean_aerosol",
+                "https://zenodo.org/records/19372152/files/pyspectral_atm_correction_lut_mca.tgz",
+            ),
+            (
+                "marine_polluted_aerosol",
+                "https://zenodo.org/records/19372152/files/pyspectral_atm_correction_lut_mpa.tgz",
+            ),
+            (
+                "marine_tropical_aerosol",
+                "https://zenodo.org/records/19372152/files/pyspectral_atm_correction_lut_mta.tgz",
+            ),
+            (
+                "rural_aerosol",
+                "https://zenodo.org/records/19372152/files/pyspectral_atm_correction_lut_ra.tgz",
+            ),
+            (
+                "urban_aerosol",
+                "https://zenodo.org/records/19372152/files/pyspectral_atm_correction_lut_ua.tgz",
+            ),
+            (
+                "rayleigh_only",
+                "https://zenodo.org/records/19372152/files/pyspectral_atm_correction_lut_ro.tgz",
+            ),
+        ];
+
+        for (key, expected_url) in expected {
+            let url = m.get(*key).expect(&format!("missing key: {}", key));
+            assert_eq!(
+                url.as_str(),
+                *expected_url,
+                "URL mismatch for aerosol type '{}'",
+                key
+            );
+        }
+
+        for (_key, url) in &m {
+            assert!(
+                url.starts_with("https://zenodo.org/records/"),
+                "URL does not start with expected base: {}",
+                url
+            );
+            assert!(
+                url.ends_with(".tgz"),
+                "URL does not end with .tgz: {}",
+                url
+            );
+            assert!(
+                url.contains("19372152/files/pyspectral_atm_correction_lut_"),
+                "URL missing expected path segment: {}",
+                url
+            );
+        }
     }
 
     fn test_rsr_data() -> (ndarray::Array1<f64>, ndarray::Array1<f64>) {
