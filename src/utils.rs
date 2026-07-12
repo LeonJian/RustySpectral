@@ -394,51 +394,36 @@ pub static ATM_CORRECTION_LUT_VERSION: once_cell::sync::Lazy<
 
 pub fn get_https_rayleigh_luts() -> HashMap<&'static str, String> {
     let mut m = HashMap::new();
-    let base = "https://zenodo.org/records/";
-    m.insert(
-        "antarctic_aerosol",
-        format!("{base}19372152/files/pyspectral_atm_correction_lut_aa.tgz"),
-    );
+    let base = "https://zenodo.org/records/1288441/files/pyspectral_atm_correction_luts_";
+    m.insert("antarctic_aerosol", format!("{base}antarctic_aerosol.tgz"));
     m.insert(
         "continental_average_aerosol",
-        format!("{base}19372152/files/pyspectral_atm_correction_lut_caa.tgz"),
+        format!("{base}continental_average_aerosol.tgz"),
     );
     m.insert(
         "continental_clean_aerosol",
-        format!("{base}19372152/files/pyspectral_atm_correction_lut_cca.tgz"),
+        format!("{base}continental_clean_aerosol.tgz"),
     );
     m.insert(
         "continental_polluted_aerosol",
-        format!("{base}19372152/files/pyspectral_atm_correction_lut_cpa.tgz"),
+        format!("{base}continental_polluted_aerosol.tgz"),
     );
-    m.insert(
-        "desert_aerosol",
-        format!("{base}19372152/files/pyspectral_atm_correction_lut_da.tgz"),
-    );
+    m.insert("desert_aerosol", format!("{base}desert_aerosol.tgz"));
     m.insert(
         "marine_clean_aerosol",
-        format!("{base}19372152/files/pyspectral_atm_correction_lut_mca.tgz"),
+        format!("{base}marine_clean_aerosol.tgz"),
     );
     m.insert(
         "marine_polluted_aerosol",
-        format!("{base}19372152/files/pyspectral_atm_correction_lut_mpa.tgz"),
+        format!("{base}marine_polluted_aerosol.tgz"),
     );
     m.insert(
         "marine_tropical_aerosol",
-        format!("{base}19372152/files/pyspectral_atm_correction_lut_mta.tgz"),
+        format!("{base}marine_tropical_aerosol.tgz"),
     );
-    m.insert(
-        "rural_aerosol",
-        format!("{base}19372152/files/pyspectral_atm_correction_lut_ra.tgz"),
-    );
-    m.insert(
-        "urban_aerosol",
-        format!("{base}19372152/files/pyspectral_atm_correction_lut_ua.tgz"),
-    );
-    m.insert(
-        "rayleigh_only",
-        format!("{base}19372152/files/pyspectral_atm_correction_lut_ro.tgz"),
-    );
+    m.insert("rural_aerosol", format!("{base}rural_aerosol.tgz"));
+    m.insert("urban_aerosol", format!("{base}urban_aerosol.tgz"));
+    m.insert("rayleigh_only", format!("{base}no_aerosol.tgz"));
     m
 }
 
@@ -517,47 +502,47 @@ mod tests {
         let expected: &[(&str, &str)] = &[
             (
                 "antarctic_aerosol",
-                "https://zenodo.org/records/19372152/files/pyspectral_atm_correction_lut_aa.tgz",
+                "https://zenodo.org/records/1288441/files/pyspectral_atm_correction_luts_antarctic_aerosol.tgz",
             ),
             (
                 "continental_average_aerosol",
-                "https://zenodo.org/records/19372152/files/pyspectral_atm_correction_lut_caa.tgz",
+                "https://zenodo.org/records/1288441/files/pyspectral_atm_correction_luts_continental_average_aerosol.tgz",
             ),
             (
                 "continental_clean_aerosol",
-                "https://zenodo.org/records/19372152/files/pyspectral_atm_correction_lut_cca.tgz",
+                "https://zenodo.org/records/1288441/files/pyspectral_atm_correction_luts_continental_clean_aerosol.tgz",
             ),
             (
                 "continental_polluted_aerosol",
-                "https://zenodo.org/records/19372152/files/pyspectral_atm_correction_lut_cpa.tgz",
+                "https://zenodo.org/records/1288441/files/pyspectral_atm_correction_luts_continental_polluted_aerosol.tgz",
             ),
             (
                 "desert_aerosol",
-                "https://zenodo.org/records/19372152/files/pyspectral_atm_correction_lut_da.tgz",
+                "https://zenodo.org/records/1288441/files/pyspectral_atm_correction_luts_desert_aerosol.tgz",
             ),
             (
                 "marine_clean_aerosol",
-                "https://zenodo.org/records/19372152/files/pyspectral_atm_correction_lut_mca.tgz",
+                "https://zenodo.org/records/1288441/files/pyspectral_atm_correction_luts_marine_clean_aerosol.tgz",
             ),
             (
                 "marine_polluted_aerosol",
-                "https://zenodo.org/records/19372152/files/pyspectral_atm_correction_lut_mpa.tgz",
+                "https://zenodo.org/records/1288441/files/pyspectral_atm_correction_luts_marine_polluted_aerosol.tgz",
             ),
             (
                 "marine_tropical_aerosol",
-                "https://zenodo.org/records/19372152/files/pyspectral_atm_correction_lut_mta.tgz",
+                "https://zenodo.org/records/1288441/files/pyspectral_atm_correction_luts_marine_tropical_aerosol.tgz",
             ),
             (
                 "rural_aerosol",
-                "https://zenodo.org/records/19372152/files/pyspectral_atm_correction_lut_ra.tgz",
+                "https://zenodo.org/records/1288441/files/pyspectral_atm_correction_luts_rural_aerosol.tgz",
             ),
             (
                 "urban_aerosol",
-                "https://zenodo.org/records/19372152/files/pyspectral_atm_correction_lut_ua.tgz",
+                "https://zenodo.org/records/1288441/files/pyspectral_atm_correction_luts_urban_aerosol.tgz",
             ),
             (
                 "rayleigh_only",
-                "https://zenodo.org/records/19372152/files/pyspectral_atm_correction_lut_ro.tgz",
+                "https://zenodo.org/records/1288441/files/pyspectral_atm_correction_luts_no_aerosol.tgz",
             ),
         ];
 
@@ -581,7 +566,7 @@ mod tests {
             );
             assert!(url.ends_with(".tgz"), "URL does not end with .tgz: {}", url);
             assert!(
-                url.contains("19372152/files/pyspectral_atm_correction_lut_"),
+                url.contains("pyspectral_atm_correction_luts_"),
                 "URL missing expected path segment: {}",
                 url
             );

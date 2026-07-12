@@ -62,10 +62,11 @@ pub fn download_luts(aerosol_types: Option<&[String]>, dry_run: bool) -> io::Res
         };
 
         let lut_dir = get_rayleigh_lut_dir(&config, aerosol_type);
-        fs::create_dir_all(&lut_dir)?;
+        if !dry_run {
+            fs::create_dir_all(&lut_dir)?;
+        }
 
-        let filename = url.rsplit('/').next().unwrap_or("lut.tgz");
-        let tarball_path = lut_dir.join(filename);
+        let tarball_path = lut_dir.join("pyspectral_rayleigh_correction_luts.tgz");
 
         if dry_run {
             info!(
@@ -73,18 +74,14 @@ pub fn download_luts(aerosol_types: Option<&[String]>, dry_run: bool) -> io::Res
                 url,
                 tarball_path.display()
             );
-            return Ok(());
-        }
-
-        if !config.download_from_internet {
-            info!("Download from internet disabled in config");
-            return Ok(());
+            continue;
         }
 
         info!("Downloading LUT data for {} from {}", aerosol_type, url);
         download_file(url, &tarball_path)?;
 
         extract_tarball(&tarball_path, &lut_dir)?;
+        fs::remove_file(&tarball_path)?;
 
         if let Some(ver_info) = ATM_CORRECTION_LUT_VERSION.get(aerosol_type.as_str()) {
             let version_file = lut_dir.join(ver_info.filename);
@@ -176,7 +173,7 @@ mod tests {
             .expect("marine_clean_aerosol should exist");
         assert_eq!(
             url.as_str(),
-            "https://zenodo.org/records/19372152/files/pyspectral_atm_correction_lut_mca.tgz"
+            "https://zenodo.org/records/1288441/files/pyspectral_atm_correction_luts_marine_clean_aerosol.tgz"
         );
     }
 
