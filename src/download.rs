@@ -165,11 +165,7 @@ mod tests {
                 "URL missing zenodo.org host: {}",
                 url
             );
-            assert!(
-                url.ends_with(".tgz"),
-                "URL should end with .tgz: {}",
-                url
-            );
+            assert!(url.ends_with(".tgz"), "URL should end with .tgz: {}", url);
         }
     }
 

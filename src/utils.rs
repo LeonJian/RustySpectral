@@ -562,7 +562,9 @@ mod tests {
         ];
 
         for (key, expected_url) in expected {
-            let url = m.get(*key).expect(&format!("missing key: {}", key));
+            let url = m
+                .get(*key)
+                .unwrap_or_else(|| panic!("missing key: {}", key));
             assert_eq!(
                 url.as_str(),
                 *expected_url,
@@ -571,17 +573,13 @@ mod tests {
             );
         }
 
-        for (_key, url) in &m {
+        for url in m.values() {
             assert!(
                 url.starts_with("https://zenodo.org/records/"),
                 "URL does not start with expected base: {}",
                 url
             );
-            assert!(
-                url.ends_with(".tgz"),
-                "URL does not end with .tgz: {}",
-                url
-            );
+            assert!(url.ends_with(".tgz"), "URL does not end with .tgz: {}", url);
             assert!(
                 url.contains("19372152/files/pyspectral_atm_correction_lut_"),
                 "URL missing expected path segment: {}",
