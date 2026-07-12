@@ -154,7 +154,7 @@ mod tests {
 
     #[test]
     fn test_lut_urls_are_valid_http() {
-        for (_key, url) in HTTPS_RAYLEIGH_LUTS.iter() {
+        for url in HTTPS_RAYLEIGH_LUTS.values() {
             assert!(
                 url.starts_with("https://"),
                 "URL missing https:// scheme: {}",
