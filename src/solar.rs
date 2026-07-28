@@ -106,7 +106,7 @@ impl SolarIrradianceSpectrum {
             }
         };
 
-        let yspl = Array1::from_vec(linear_interpolate(&xspl, src_x, src_y));
+        let yspl = Array1::from_vec(cubic_spline_interpolate(&xspl, src_x, src_y));
 
         self.ipol_wavelength = Some(xspl);
         self.ipol_irradiance = Some(yspl);
@@ -148,7 +148,7 @@ impl SolarIrradianceSpectrum {
         let mut masked_irr = Vec::with_capacity(capacity);
         let mut masked_resp = Vec::with_capacity(capacity);
 
-        let resp_ipol = linear_interpolate(ipol_w, &wvl, resp);
+        let resp_ipol = cubic_spline_interpolate(ipol_w, &wvl, resp);
 
         for i in 0..n_ipol {
             let w = ipol_w[i];
@@ -209,6 +209,93 @@ fn linear_interpolate(x_new: &Array1<f64>, x_vals: &Array1<f64>, y_vals: &Array1
             }
 
             y0 + (y1 - y0) * (x - x0) / (x1 - x0)
+        })
+        .collect()
+}
+
+fn cubic_spline_interpolate(
+    x_new: &Array1<f64>,
+    x_vals: &Array1<f64>,
+    y_vals: &Array1<f64>,
+) -> Vec<f64> {
+    let n = x_vals.len();
+    if n < 2 {
+        return vec![y_vals[0]; x_new.len()];
+    }
+    if n == 2 {
+        return linear_interpolate(x_new, x_vals, y_vals);
+    }
+
+    let x_slice = x_vals.as_slice().unwrap();
+    let y_slice = y_vals.as_slice().unwrap();
+
+    let m = n - 2;
+    let mut h = vec![0.0; n - 1];
+    for i in 0..n - 1 {
+        h[i] = x_slice[i + 1] - x_slice[i];
+        if h[i].abs() < 1e-15 {
+            return linear_interpolate(x_new, x_vals, y_vals);
+        }
+    }
+
+    let mut a = vec![0.0; m]; // subdiagonal
+    let mut b = vec![0.0; m]; // main diagonal
+    let mut c = vec![0.0; m]; // superdiagonal
+    let mut d = vec![0.0; m]; // RHS
+
+    // Natural spline: M_0 = 0, M_{n-1} = 0
+    // m = n-2 equations, unknowns M_1..M_{n-2}
+    for k in 0..m {
+        // Equation for M_{k+1} (i = k+1)
+        let i = k + 1;
+        // h_{i-1} * M_{i-1} + 2*(h_{i-1}+h_i) * M_i + h_i * M_{i+1} = 6*(dy_i/h_i - dy_{i-1}/h_{i-1})
+        a[k] = h[i - 1];
+        b[k] = 2.0 * (h[i - 1] + h[i]);
+        c[k] = h[i];
+        d[k] = 6.0 * ((y_slice[i + 1] - y_slice[i]) / h[i] - (y_slice[i] - y_slice[i - 1]) / h[i - 1]);
+    }
+
+    // Thomas algorithm (tridiagonal solver)
+    // Forward sweep: eliminate lower diagonal
+    for k in 1..m {
+        let w = a[k] / b[k - 1];
+        b[k] -= w * c[k - 1];
+        d[k] -= w * d[k - 1];
+    }
+
+    // Back substitution
+    let mut mm = vec![0.0; n]; // M values, index 0..n-1, M_0=0, M_{n-1}=0 by natural BC
+    mm[m - 1] = d[m - 1] / b[m - 1];
+    for k in (0..m - 1).rev() {
+        mm[k + 1] = (d[k] - c[k] * mm[k + 2]) / b[k];
+    }
+
+    // Evaluate spline at each output point
+    x_new
+        .iter()
+        .map(|&xq| {
+            if xq <= x_slice[0] {
+                return y_slice[0];
+            }
+            if xq >= x_slice[n - 1] {
+                return y_slice[n - 1];
+            }
+
+            let idx = match x_slice.binary_search_by(|&v| v.partial_cmp(&xq).unwrap()) {
+                Ok(i) => i,
+                Err(i) => i.saturating_sub(1),
+            };
+            let i = idx.min(n - 2);
+            let hi = x_slice[i + 1] - x_slice[i];
+            let dx1 = x_slice[i + 1] - xq;
+            let dx0 = xq - x_slice[i];
+
+            let a_term = mm[i] * dx1.powi(3) / (6.0 * hi);
+            let b_term = mm[i + 1] * dx0.powi(3) / (6.0 * hi);
+            let c_term = (y_slice[i] - mm[i] * hi.powi(2) / 6.0) * dx1 / hi;
+            let d_term = (y_slice[i + 1] - mm[i + 1] * hi.powi(2) / 6.0) * dx0 / hi;
+
+            a_term + b_term + c_term + d_term
         })
         .collect()
 }

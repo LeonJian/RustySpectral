@@ -30,7 +30,7 @@ impl ReflectanceCalculator {
             central_wavelength: 3.78e-6,
             wavelength: Array1::zeros(0),
             response: Array1::zeros(0),
-            rsr_integral: 0.0,
+            rsr_integral: 1.0,
             sunz_threshold: TERMINATOR_LIMIT,
             masking_limit: Some(TERMINATOR_LIMIT),
         }
