@@ -2,6 +2,7 @@ use ndarray::Array1;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
+#[inline]
 pub fn trapezoid(y: &Array1<f64>, x: &Array1<f64>) -> f64 {
     let n = y.len();
     if n < 2 {
@@ -14,6 +15,7 @@ pub fn trapezoid(y: &Array1<f64>, x: &Array1<f64>) -> f64 {
     0.5 * sum
 }
 
+#[inline]
 pub fn get_central_wave(wav: &Array1<f64>, resp: &Array1<f64>, weight: &Array1<f64>) -> f64 {
     let numerator = trapezoid(&(resp * wav * weight), wav);
     let denominator = trapezoid(&(resp * weight), wav);
@@ -42,35 +44,27 @@ pub fn convert2wavenumber_rsr(
 
 pub fn sort_data(x_vals: &Array1<f64>, y_vals: &Array1<f64>) -> (Array1<f64>, Array1<f64>) {
     let n = x_vals.len();
+    let mut pairs: Vec<(f64, f64)> = (0..n).map(|i| (x_vals[i], y_vals[i])).collect();
+    pairs.sort_unstable_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
 
-    let mut indices: Vec<usize> = (0..n).collect();
-    indices.sort_by(|&a, &b| {
-        x_vals[a]
-            .partial_cmp(&x_vals[b])
-            .unwrap_or(std::cmp::Ordering::Equal)
-    });
-
-    let mut sorted_x = Array1::zeros(n);
-    let mut sorted_y = Array1::zeros(n);
-    for (i, &idx) in indices.iter().enumerate() {
-        sorted_x[i] = x_vals[idx];
-        sorted_y[i] = y_vals[idx];
-    }
-
-    let mut keep = vec![true; n];
-    for i in 1..n {
-        if sorted_x[i] <= sorted_x[i - 1] {
-            keep[i] = false;
+    let mut unique_count = 1usize;
+    for i in 1..pairs.len() {
+        if pairs[i].0 > pairs[i - 1].0 {
+            unique_count += 1;
         }
     }
 
-    let deduped: Vec<_> = (0..n).filter(|&i| keep[i]).collect();
-    let m = deduped.len();
-    let mut result_x = Array1::zeros(m);
-    let mut result_y = Array1::zeros(m);
-    for (i, &idx) in deduped.iter().enumerate() {
-        result_x[i] = sorted_x[idx];
-        result_y[i] = sorted_y[idx];
+    let mut result_x = Array1::zeros(unique_count);
+    let mut result_y = Array1::zeros(unique_count);
+    result_x[0] = pairs[0].0;
+    result_y[0] = pairs[0].1;
+    let mut j = 1usize;
+    for i in 1..pairs.len() {
+        if pairs[i].0 > pairs[i - 1].0 {
+            result_x[j] = pairs[i].0;
+            result_y[j] = pairs[i].1;
+            j += 1;
+        }
     }
 
     (result_x, result_y)
@@ -702,6 +696,57 @@ mod tests {
             approx::assert_abs_diff_eq!(x_sorted[i], expected_x[i]);
             approx::assert_abs_diff_eq!(y_sorted[i], expected_y[i]);
         }
+    }
+
+    #[test]
+    fn test_sort_data_single_element() {
+        let x = ndarray::arr1(&[5.0_f64]);
+        let y = ndarray::arr1(&[100.0_f64]);
+        let (x_sorted, y_sorted) = sort_data(&x, &y);
+        assert_eq!(x_sorted.len(), 1);
+        assert_eq!(y_sorted.len(), 1);
+        approx::assert_abs_diff_eq!(x_sorted[0], 5.0);
+        approx::assert_abs_diff_eq!(y_sorted[0], 100.0);
+    }
+
+    #[test]
+    fn test_sort_data_all_duplicates() {
+        let x = ndarray::arr1(&[2.0, 2.0, 2.0_f64]);
+        let y = ndarray::arr1(&[1.0, 2.0, 3.0_f64]);
+        let (x_sorted, y_sorted) = sort_data(&x, &y);
+        assert_eq!(x_sorted.len(), 1);
+        assert_eq!(y_sorted.len(), 1);
+        approx::assert_abs_diff_eq!(x_sorted[0], 2.0);
+        approx::assert_abs_diff_eq!(y_sorted[0], 1.0);
+    }
+
+    #[test]
+    fn test_sort_data_preserves_first_duplicate_y() {
+        let x = ndarray::arr1(&[1.0, 1.0, 2.0_f64]);
+        let y = ndarray::arr1(&[10.0, 20.0, 30.0_f64]);
+        let (x_sorted, y_sorted) = sort_data(&x, &y);
+        assert_eq!(x_sorted.len(), 2);
+        approx::assert_abs_diff_eq!(x_sorted[0], 1.0);
+        approx::assert_abs_diff_eq!(y_sorted[0], 10.0);
+    }
+
+    #[test]
+    fn test_trapezoid_large_array() {
+        let n = 1000;
+        let x: Vec<f64> = (0..n).map(|i| i as f64 * 0.001).collect();
+        let y: Vec<f64> = x.iter().map(|&xi| xi.powi(2)).collect();
+        let x_arr = Array1::from_vec(x);
+        let y_arr = Array1::from_vec(y);
+        let result = trapezoid(&y_arr, &x_arr);
+        let expected = 0.999_f64.powi(3) / 3.0;
+        approx::assert_abs_diff_eq!(result, expected, epsilon = 1e-3);
+    }
+
+    #[test]
+    fn test_trapezoid_single_element() {
+        let x = ndarray::arr1(&[1.0_f64]);
+        let y = ndarray::arr1(&[5.0_f64]);
+        assert_eq!(trapezoid(&y, &x), 0.0);
     }
 
     #[test]

@@ -56,6 +56,7 @@ pub static SEVIRI: once_cell::sync::Lazy<
     HashMap<&'static str, HashMap<&'static str, SeviriParams>>,
 > = once_cell::sync::Lazy::new(get_seviri_params);
 
+#[inline]
 pub fn radiance2tb(radiance: f64, wavelength: f64) -> f64 {
     blackbody_rad2temp(wavelength, radiance)
 }
@@ -107,6 +108,7 @@ pub fn make_tb2rad_lut(
     (lut_tb, lut_rad)
 }
 
+#[inline]
 pub fn seviri_radiance2tb(radiance: f64, central_wavenumber: f64, alpha: f64, beta: f64) -> f64 {
     let c1 = 2.0 * H_PLANCK * C_SPEED * C_SPEED;
     let c2 = H_PLANCK * C_SPEED / K_BOLTZMANN;
@@ -117,6 +119,7 @@ pub fn seviri_radiance2tb(radiance: f64, central_wavenumber: f64, alpha: f64, be
     c2 * vc / (alpha * arg.ln()) - beta / alpha
 }
 
+#[inline]
 pub fn seviri_tb2radiance(tb: f64, central_wavenumber: f64, alpha: f64, beta: f64) -> f64 {
     let c1 = 2.0 * H_PLANCK * C_SPEED * C_SPEED;
     let c2 = H_PLANCK * C_SPEED / K_BOLTZMANN;

@@ -16,6 +16,7 @@ pub fn blackbody_wn(wavenumber: f64, temperature: f64) -> f64 {
     planck_wn(wavenumber, temperature)
 }
 
+#[inline]
 pub fn planck(wave: f64, temperature: f64) -> f64 {
     if temperature.abs() < EPSILON {
         return f64::NAN;
@@ -29,6 +30,7 @@ pub fn planck(wave: f64, temperature: f64) -> f64 {
     nom / (exp_arg.exp() - 1.0)
 }
 
+#[inline]
 pub fn planck_wn(wavenumber: f64, temperature: f64) -> f64 {
     if temperature.abs() < EPSILON {
         return f64::NAN;
@@ -50,6 +52,7 @@ pub fn planck_array_wn(wavenumber: f64, temperature: &Array2<f64>) -> Array2<f64
     temperature.mapv(|t| planck_wn(wavenumber, t))
 }
 
+#[inline]
 pub fn blackbody_rad2temp(wavelength: f64, radiance: f64) -> f64 {
     if radiance <= 0.0 {
         return f64::NAN;
@@ -61,6 +64,7 @@ pub fn blackbody_rad2temp(wavelength: f64, radiance: f64) -> f64 {
     PLANCK_C1 / (wavelength * arg.ln())
 }
 
+#[inline]
 pub fn blackbody_wn_rad2temp(wavenumber: f64, radiance: f64) -> f64 {
     if radiance <= 0.0 {
         return f64::NAN;

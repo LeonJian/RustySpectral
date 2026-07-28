@@ -134,35 +134,28 @@ impl SolarIrradianceSpectrum {
 
         let start = wvl[0];
         let end = wvl[wvl.len() - 1];
-        let n = ((end - start) / self.dlambda).round() as usize + 1;
-        let xspl: Vec<f64> = (0..n).map(|i| start + i as f64 * self.dlambda).collect();
-        let xspl_a = Array1::from_vec(xspl);
-
-        let resp_ipol = Array1::from_vec(linear_interpolate(&xspl_a, &wvl, resp));
 
         self.interpolate(self.dlambda, Some((start, end)));
 
         let ipol_w = self.ipol_wavelength.as_ref().unwrap();
         let ipol_i = self.ipol_irradiance.as_ref().unwrap();
 
-        let mask: Vec<bool> = ipol_w.iter().map(|&x| x >= start && x <= end).collect();
+        let n_ipol = ipol_w.len();
+        let n_expected = ((end - start) / self.dlambda).round() as usize + 1;
+        let capacity = n_expected.min(n_ipol);
 
-        let mut masked_wvl = Vec::new();
-        let mut masked_irr = Vec::new();
-        let mut masked_resp = Vec::new();
+        let mut masked_wvl = Vec::with_capacity(capacity);
+        let mut masked_irr = Vec::with_capacity(capacity);
+        let mut masked_resp = Vec::with_capacity(capacity);
 
-        let mut resp_idx = 0usize;
-        for (i, &m) in mask.iter().enumerate() {
-            if m {
-                masked_wvl.push(ipol_w[i]);
+        let resp_ipol = linear_interpolate(ipol_w, &wvl, resp);
+
+        for i in 0..n_ipol {
+            let w = ipol_w[i];
+            if w >= start && w <= end {
+                masked_wvl.push(w);
                 masked_irr.push(ipol_i[i]);
-                // Map back to response grid using nearest-neighbor or linear
-                if i < resp_ipol.len() {
-                    masked_resp.push(resp_ipol[i]);
-                } else {
-                    masked_resp.push(resp_ipol[resp_idx.min(resp_ipol.len() - 1)]);
-                }
-                resp_idx += 1;
+                masked_resp.push(resp_ipol[i]);
             }
         }
 

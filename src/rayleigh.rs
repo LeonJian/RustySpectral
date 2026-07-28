@@ -11,6 +11,14 @@ use crate::utils::{
     self, get_central_wave, AEROSOL_TYPES, ATMOSPHERES, ATM_CORRECTION_LUT_VERSION,
 };
 
+struct CachedLutData {
+    reflectance_4d: Array4<f64>,
+    wvl_coord: Array1<f64>,
+    azid_coord: Array1<f64>,
+    satz_sec_coord: Array1<f64>,
+    sunz_sec_coord: Array1<f64>,
+}
+
 pub fn clip_angles_inside_coordinate_range(
     zenith_angle: &Array1<f64>,
     zenith_secant_max: f64,
@@ -25,6 +33,7 @@ pub fn clip_angles_inside_coordinate_range(
     })
 }
 
+#[inline]
 pub fn clip_angles_inside_coordinate_range_scalar(
     zenith_angle: f64,
     zenith_secant_max: f64,
@@ -56,8 +65,10 @@ pub fn reduce_rayleigh_highzenith(
     rayref * &factor
 }
 
+#[inline]
 pub fn get_wavelength_index_and_factor(wvl_coord: &Array1<f64>, wvl: f64) -> (usize, f64) {
     let idx = match wvl_coord.iter().position(|&v| v > wvl) {
+        Some(0) => 1,
         Some(i) => i,
         None => wvl_coord.len() - 1,
     };
@@ -125,6 +136,7 @@ pub fn trilinear_interpolate(
     (c0 * (1.0 - sd) + c1 * sd) * 100.0
 }
 
+#[inline]
 fn find_interval_index(coords: &Array1<f64>, value: f64) -> usize {
     let idx = coords
         .iter()
@@ -269,6 +281,7 @@ pub struct Rayleigh {
     pub sensor: String,
     pub platform_name: String,
     pub reflectance_lut_filename: PathBuf,
+    lut_data: CachedLutData,
 }
 
 impl Rayleigh {
@@ -300,11 +313,58 @@ impl Rayleigh {
             }
         }
 
+        let lut_data = Self::load_lut_data(&reflectance_lut_filename);
+
         Rayleigh {
             base,
             sensor: sensor_norm,
             platform_name: platform_name.to_string(),
             reflectance_lut_filename,
+            lut_data,
+        }
+    }
+
+    fn load_lut_data(lut_filename: &Path) -> CachedLutData {
+        let h5file = hdf5_pure::File::open(lut_filename).expect("Failed to open Rayleigh LUT file");
+        let root = h5file.root();
+
+        let read_coord = |name: &str| -> Array1<f64> {
+            let ds = root
+                .dataset(name)
+                .unwrap_or_else(|_| panic!("Dataset '{}' not found in LUT file", name));
+            Array1::from_vec(
+                ds.read_f64()
+                    .unwrap_or_else(|_| panic!("Failed to read '{}'", name)),
+            )
+        };
+
+        let azid_coord = read_coord("azimuth_difference");
+        let satz_sec_coord = read_coord("satellite_zenith_secant");
+        let sunz_sec_coord = read_coord("sun_zenith_secant");
+        let wvl_coord = read_coord("wavelengths");
+
+        let refl_ds = root
+            .dataset("reflectance")
+            .expect("Dataset 'reflectance' not found in LUT file");
+        let shape = refl_ds.shape().expect("Failed to get reflectance shape");
+        let (nw, ns, na, nt) = (
+            shape[0] as usize,
+            shape[1] as usize,
+            shape[2] as usize,
+            shape[3] as usize,
+        );
+        let refl_values: Vec<f64> = refl_ds
+            .read_f64()
+            .expect("Failed to read reflectance dataset");
+        let reflectance_4d = Array4::from_shape_vec((nw, ns, na, nt), refl_values)
+            .expect("Reflectance shape mismatch");
+
+        CachedLutData {
+            reflectance_4d,
+            wvl_coord,
+            azid_coord,
+            satz_sec_coord,
+            sunz_sec_coord,
         }
     }
 
@@ -417,26 +477,18 @@ impl Rayleigh {
         azidiff: &Array1<f64>,
         wvl_nm: f64,
     ) -> Result<Array1<f64>, String> {
-        let (azid_coord, satz_sec_coord, sunz_sec_coord) =
-            get_reflectance_lut_from_file(&self.reflectance_lut_filename)?;
-
-        let rayleigh_refl = read_reflectance_lut_4d(&self.reflectance_lut_filename)?;
-        let wvl_coord = read_wavelength_lut_coord(&self.reflectance_lut_filename)?;
-
-        let grid3 = get_wavelength_adjusted_lut(&rayleigh_refl, &wvl_coord, wvl_nm);
+        let lut = &self.lut_data;
+        let grid3 = get_wavelength_adjusted_lut(&lut.reflectance_4d, &lut.wvl_coord, wvl_nm);
 
         let n = sun_zenith.len();
         let mut result = Array1::zeros(n);
 
+        let sunz_sec_max = lut.sunz_sec_coord[lut.sunz_sec_coord.len() - 1];
+        let satz_sec_max = lut.satz_sec_coord[lut.satz_sec_coord.len() - 1];
+
         for i in 0..n {
-            let sz = clip_angles_inside_coordinate_range_scalar(
-                sun_zenith[i],
-                sunz_sec_coord[sunz_sec_coord.len() - 1],
-            );
-            let satz = clip_angles_inside_coordinate_range_scalar(
-                sat_zenith[i],
-                satz_sec_coord[satz_sec_coord.len() - 1],
-            );
+            let sz = clip_angles_inside_coordinate_range_scalar(sun_zenith[i], sunz_sec_max);
+            let satz = clip_angles_inside_coordinate_range_scalar(sat_zenith[i], satz_sec_max);
             let sunzsec = 1.0 / sz.to_radians().cos().max(0.0001);
             let satzsec = 1.0 / satz.to_radians().cos().max(0.0001);
 
@@ -445,9 +497,9 @@ impl Rayleigh {
                 sunzsec,
                 azidiff[i],
                 satzsec,
-                &sunz_sec_coord,
-                &azid_coord,
-                &satz_sec_coord,
+                &lut.sunz_sec_coord,
+                &lut.azid_coord,
+                &lut.satz_sec_coord,
             );
         }
 
@@ -724,5 +776,85 @@ mod tests {
         let names: Vec<&str> = atms.iter().map(|(n, _)| *n).collect();
         assert!(names.contains(&"midlatitude_summer"));
         assert!(names.contains(&"us_standard"));
+    }
+
+    #[test]
+    fn test_get_wavelength_index_and_factor_edge_cases() {
+        let coords = arr1(&[400.0, 500.0, 600.0]);
+        let (idx, factor) = get_wavelength_index_and_factor(&coords, 350.0);
+        assert_eq!(idx, 1);
+        assert_abs_diff_eq!(factor, 1.5, epsilon = 1e-10);
+
+        let (idx, factor) = get_wavelength_index_and_factor(&coords, 650.0);
+        assert_eq!(idx, 2);
+        assert_abs_diff_eq!(factor, -0.5, epsilon = 1e-10);
+    }
+
+    #[test]
+    fn test_trilinear_interpolate_corner() {
+        let grid = Array3::from_shape_fn((2, 2, 2), |(i, j, k)| (i + j + k) as f64);
+        let sunz_coord = arr1(&[1.0, 2.0]);
+        let azid_coord = arr1(&[0.0, 180.0]);
+        let satz_coord = arr1(&[1.0, 2.0]);
+
+        // sunz=1.0 (sd=0), azidiff_in=0 => azidiff=180 (ad=1), satz=1.0 (td=0)
+        // maps to grid[0,1,0] = 1 * 100 = 100
+        let result =
+            trilinear_interpolate(&grid, 1.0, 0.0, 1.0, &sunz_coord, &azid_coord, &satz_coord);
+        assert_abs_diff_eq!(result, 100.0, epsilon = 1e-10);
+
+        // sunz=2.0 (sd=1), azidiff_in=0 => azidiff=180 (ad=1), satz=2.0 (td=1)
+        // maps to grid[1,1,1] = 3 * 100 = 300
+        let result =
+            trilinear_interpolate(&grid, 2.0, 0.0, 2.0, &sunz_coord, &azid_coord, &satz_coord);
+        assert_abs_diff_eq!(result, 300.0, epsilon = 1e-10);
+    }
+
+    #[test]
+    fn test_trilinear_interpolate_midpoint() {
+        let grid = Array3::from_shape_fn((2, 2, 2), |(i, j, k)| (i + j + k) as f64);
+        let sunz_coord = arr1(&[1.0, 2.0]);
+        let azid_coord = arr1(&[0.0, 180.0]);
+        let satz_coord = arr1(&[1.0, 2.0]);
+
+        let result =
+            trilinear_interpolate(&grid, 1.5, 90.0, 1.5, &sunz_coord, &azid_coord, &satz_coord);
+        assert_abs_diff_eq!(result, 150.0, epsilon = 1e-10);
+    }
+
+    #[test]
+    fn test_find_interval_index() {
+        let coords = arr1(&[1.0, 2.0, 3.0, 4.0, 5.0]);
+        assert_eq!(find_interval_index(&coords, 0.5), 0);
+        assert_eq!(find_interval_index(&coords, 1.5), 0);
+        assert_eq!(find_interval_index(&coords, 2.5), 1);
+        assert_eq!(find_interval_index(&coords, 5.5), 3);
+    }
+
+    #[test]
+    fn test_clip_angles_scalar_nan() {
+        let result = clip_angles_inside_coordinate_range_scalar(f64::NAN, 2.0);
+        assert_eq!(result, 0.0);
+    }
+
+    #[test]
+    fn test_reduce_rayleigh_highzenith_full_reduction() {
+        let zenith = arr1(&[85.0, 86.0, 87.0]);
+        let rayref = arr1(&[50.0, 50.0, 50.0]);
+        let result = reduce_rayleigh_highzenith(&zenith, &rayref, 85.0, 90.0, 1.0);
+        let expected = arr1(&[50.0, 40.0, 30.0]);
+        for i in 0..3 {
+            assert_abs_diff_eq!(result[i], expected[i], epsilon = 1e-3);
+        }
+    }
+
+    #[test]
+    fn test_reduce_rayleigh_highzenith_below_threshold() {
+        let zenith = arr1(&[10.0, 20.0, 30.0]);
+        let rayref = arr1(&[10.0, 20.0, 30.0]);
+        let result = reduce_rayleigh_highzenith(&zenith, &rayref, 40.0, 90.0, 1.0);
+        for i in 0..3 {
+            assert_abs_diff_eq!(result[i], rayref[i], epsilon = 1e-6);
+        }
     }
 }
