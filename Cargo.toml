@@ -2,7 +2,7 @@
 
 [package]
 name = "rustyspectral"
-version = "1.0.2"
+version = "1.0.3"
 edition = "2021"
 description = "Rust port of pyspectral: satellite sensor spectral response & solar spectrum analysis"
 repository = "https://github.com/anomalyco/RustySpectral"
