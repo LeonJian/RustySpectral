@@ -100,6 +100,7 @@ fn download_file(url: &str, dest: &Path) -> io::Result<()> {
     let agent = Agent::new_with_defaults();
     let resp = agent
         .get(url)
+        .header("User-Agent", "rustyspectral (+https://github.com/LeonJian/RustySpectral)")
         .call()
         .map_err(|e| io::Error::other(format!("HTTP request failed: {}", e)))?;
 
@@ -158,7 +159,7 @@ mod tests {
                 url
             );
             assert!(
-                url.contains("zenodo.org/records/"),
+                url.contains("zenodo.org/record/"),
                 "URL missing zenodo.org host: {}",
                 url
             );
@@ -173,7 +174,7 @@ mod tests {
             .expect("marine_clean_aerosol should exist");
         assert_eq!(
             url.as_str(),
-            "https://zenodo.org/records/1288441/files/pyspectral_atm_correction_luts_marine_clean_aerosol.tgz"
+            "https://zenodo.org/record/1288441/files/pyspectral_atm_correction_luts_marine_clean_aerosol.tgz"
         );
     }
 

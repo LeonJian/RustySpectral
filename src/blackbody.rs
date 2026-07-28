@@ -18,7 +18,7 @@ pub fn blackbody_wn(wavenumber: f64, temperature: f64) -> f64 {
 
 #[inline]
 pub fn planck(wave: f64, temperature: f64) -> f64 {
-    if temperature.abs() < EPSILON {
+    if temperature.abs() <= EPSILON {
         return f64::NAN;
     }
     let nom = PLANCK_C2 / wave.powi(5);
@@ -32,7 +32,7 @@ pub fn planck(wave: f64, temperature: f64) -> f64 {
 
 #[inline]
 pub fn planck_wn(wavenumber: f64, temperature: f64) -> f64 {
-    if temperature.abs() < EPSILON {
+    if temperature.abs() <= EPSILON {
         return f64::NAN;
     }
     let nom = PLANCK_C2 * wavenumber.powi(3);

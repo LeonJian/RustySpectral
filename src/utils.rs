@@ -45,7 +45,7 @@ pub fn convert2wavenumber_rsr(
 pub fn sort_data(x_vals: &Array1<f64>, y_vals: &Array1<f64>) -> (Array1<f64>, Array1<f64>) {
     let n = x_vals.len();
     let mut pairs: Vec<(f64, f64)> = (0..n).map(|i| (x_vals[i], y_vals[i])).collect();
-    pairs.sort_unstable_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+    pairs.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
 
     let mut unique_count = 1usize;
     for i in 1..pairs.len() {
@@ -142,22 +142,28 @@ pub fn are_instruments_identical(name1: &str, name2: &str) -> bool {
     if name1 == name2 {
         return true;
     }
-    let translate = |s: &str| -> String {
+    let translate = |s: &str| -> Option<&str> {
         match s {
-            "avhrr-1" => "avhrr/1".to_string(),
-            "avhrr-2" => "avhrr/2".to_string(),
-            "avhrr-3" => "avhrr/3".to_string(),
-            _ => s.to_string(),
+            "avhrr-1" => Some("avhrr/1"),
+            "avhrr-2" => Some("avhrr/2"),
+            "avhrr-3" => Some("avhrr/3"),
+            _ => None,
         }
     };
-    translate(name1) == translate(name2)
+    let t1 = translate(name1).unwrap_or(name1);
+    let t2 = translate(name2).unwrap_or(name2);
+    t1 == t2
 }
 
 pub fn check_and_adjust_instrument_name(platform_name: &str, instrument: &str) -> String {
+    let replace_name = |s: &str| -> String {
+        s.to_lowercase().replace("/", "").replace("-", "")
+    };
+
     if let Some(expected) = INSTRUMENTS.get(platform_name) {
         match expected {
             InstrumentValue::Single(s) => {
-                let normalized = s.replace("/", "");
+                let normalized = replace_name(s);
                 if normalized != instrument {
                     log::warn!(
                         "Inconsistent sensor/satellite input - sensor set to {}",
@@ -169,15 +175,15 @@ pub fn check_and_adjust_instrument_name(platform_name: &str, instrument: &str) -
             InstrumentValue::List(list) => {
                 let norm_instr = instrument.replace("/", "");
                 for s in list {
-                    if s.replace("/", "") == norm_instr {
-                        return norm_instr;
+                    if replace_name(s) == norm_instr {
+                        return replace_name(s);
                     }
                 }
-                list.join("/")
+                replace_name(&list[0])
             }
         }
     } else {
-        instrument.to_lowercase().replace("/", "").replace("-", "")
+        replace_name(instrument)
     }
 }
 
@@ -388,7 +394,7 @@ pub static ATM_CORRECTION_LUT_VERSION: once_cell::sync::Lazy<
 
 pub fn get_https_rayleigh_luts() -> HashMap<&'static str, String> {
     let mut m = HashMap::new();
-    let base = "https://zenodo.org/records/1288441/files/pyspectral_atm_correction_luts_";
+    let base = "https://zenodo.org/record/1288441/files/pyspectral_atm_correction_luts_";
     m.insert("antarctic_aerosol", format!("{base}antarctic_aerosol.tgz"));
     m.insert(
         "continental_average_aerosol",
@@ -496,47 +502,47 @@ mod tests {
         let expected: &[(&str, &str)] = &[
             (
                 "antarctic_aerosol",
-                "https://zenodo.org/records/1288441/files/pyspectral_atm_correction_luts_antarctic_aerosol.tgz",
+                "https://zenodo.org/record/1288441/files/pyspectral_atm_correction_luts_antarctic_aerosol.tgz",
             ),
             (
                 "continental_average_aerosol",
-                "https://zenodo.org/records/1288441/files/pyspectral_atm_correction_luts_continental_average_aerosol.tgz",
+                "https://zenodo.org/record/1288441/files/pyspectral_atm_correction_luts_continental_average_aerosol.tgz",
             ),
             (
                 "continental_clean_aerosol",
-                "https://zenodo.org/records/1288441/files/pyspectral_atm_correction_luts_continental_clean_aerosol.tgz",
+                "https://zenodo.org/record/1288441/files/pyspectral_atm_correction_luts_continental_clean_aerosol.tgz",
             ),
             (
                 "continental_polluted_aerosol",
-                "https://zenodo.org/records/1288441/files/pyspectral_atm_correction_luts_continental_polluted_aerosol.tgz",
+                "https://zenodo.org/record/1288441/files/pyspectral_atm_correction_luts_continental_polluted_aerosol.tgz",
             ),
             (
                 "desert_aerosol",
-                "https://zenodo.org/records/1288441/files/pyspectral_atm_correction_luts_desert_aerosol.tgz",
+                "https://zenodo.org/record/1288441/files/pyspectral_atm_correction_luts_desert_aerosol.tgz",
             ),
             (
                 "marine_clean_aerosol",
-                "https://zenodo.org/records/1288441/files/pyspectral_atm_correction_luts_marine_clean_aerosol.tgz",
+                "https://zenodo.org/record/1288441/files/pyspectral_atm_correction_luts_marine_clean_aerosol.tgz",
             ),
             (
                 "marine_polluted_aerosol",
-                "https://zenodo.org/records/1288441/files/pyspectral_atm_correction_luts_marine_polluted_aerosol.tgz",
+                "https://zenodo.org/record/1288441/files/pyspectral_atm_correction_luts_marine_polluted_aerosol.tgz",
             ),
             (
                 "marine_tropical_aerosol",
-                "https://zenodo.org/records/1288441/files/pyspectral_atm_correction_luts_marine_tropical_aerosol.tgz",
+                "https://zenodo.org/record/1288441/files/pyspectral_atm_correction_luts_marine_tropical_aerosol.tgz",
             ),
             (
                 "rural_aerosol",
-                "https://zenodo.org/records/1288441/files/pyspectral_atm_correction_luts_rural_aerosol.tgz",
+                "https://zenodo.org/record/1288441/files/pyspectral_atm_correction_luts_rural_aerosol.tgz",
             ),
             (
                 "urban_aerosol",
-                "https://zenodo.org/records/1288441/files/pyspectral_atm_correction_luts_urban_aerosol.tgz",
+                "https://zenodo.org/record/1288441/files/pyspectral_atm_correction_luts_urban_aerosol.tgz",
             ),
             (
                 "rayleigh_only",
-                "https://zenodo.org/records/1288441/files/pyspectral_atm_correction_luts_no_aerosol.tgz",
+                "https://zenodo.org/record/1288441/files/pyspectral_atm_correction_luts_no_aerosol.tgz",
             ),
         ];
 
@@ -554,7 +560,7 @@ mod tests {
 
         for url in m.values() {
             assert!(
-                url.starts_with("https://zenodo.org/records/"),
+                url.starts_with("https://zenodo.org/record/"),
                 "URL does not start with expected base: {}",
                 url
             );

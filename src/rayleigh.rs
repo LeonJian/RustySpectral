@@ -23,7 +23,11 @@ pub fn clip_angles_inside_coordinate_range(
     zenith_angle: &Array1<f64>,
     zenith_secant_max: f64,
 ) -> Array1<f64> {
-    let clip_angle = (1.0 / zenith_secant_max).acos().to_degrees();
+    let clip_angle = if zenith_secant_max < 1.0 {
+        0.0
+    } else {
+        (1.0 / zenith_secant_max).acos().to_degrees()
+    };
     zenith_angle.mapv(|z| {
         if z.is_nan() {
             0.0
@@ -387,6 +391,18 @@ impl Rayleigh {
             );
             wvl_nm = wvl_um * 1000.0;
             let _band_name = format!("{:.6}um", wvl_um);
+
+            let wvl_min = self.lut_data.wvl_coord[0];
+            let wvl_max = self.lut_data.wvl_coord[self.lut_data.wvl_coord.len() - 1];
+            if wvl_nm <= wvl_min || wvl_nm >= wvl_max {
+                warn!(
+                    "Wavelength {} nm outside LUT range [{}, {}]!",
+                    wvl_nm, wvl_min, wvl_max
+                );
+                info!("Setting the rayleigh/aerosol reflectance contribution to zero!");
+                let n = sun_zenith.len();
+                return Array1::zeros(n);
+            }
         } else {
             band_name = band_name_or_wavelength.to_string();
 
