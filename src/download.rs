@@ -100,7 +100,10 @@ fn download_file(url: &str, dest: &Path) -> io::Result<()> {
     let agent = Agent::new_with_defaults();
     let resp = agent
         .get(url)
-        .header("User-Agent", "rustyspectral (+https://github.com/LeonJian/RustySpectral)")
+        .header(
+            "User-Agent",
+            "rustyspectral (+https://github.com/LeonJian/RustySpectral)",
+        )
         .call()
         .map_err(|e| io::Error::other(format!("HTTP request failed: {}", e)))?;
 

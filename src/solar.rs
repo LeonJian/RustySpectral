@@ -252,7 +252,8 @@ fn cubic_spline_interpolate(
         a[k] = h[i - 1];
         b[k] = 2.0 * (h[i - 1] + h[i]);
         c[k] = h[i];
-        d[k] = 6.0 * ((y_slice[i + 1] - y_slice[i]) / h[i] - (y_slice[i] - y_slice[i - 1]) / h[i - 1]);
+        d[k] =
+            6.0 * ((y_slice[i + 1] - y_slice[i]) / h[i] - (y_slice[i] - y_slice[i - 1]) / h[i - 1]);
     }
 
     // Thomas algorithm (tridiagonal solver)

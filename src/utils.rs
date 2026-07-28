@@ -156,9 +156,7 @@ pub fn are_instruments_identical(name1: &str, name2: &str) -> bool {
 }
 
 pub fn check_and_adjust_instrument_name(platform_name: &str, instrument: &str) -> String {
-    let replace_name = |s: &str| -> String {
-        s.to_lowercase().replace("/", "").replace("-", "")
-    };
+    let replace_name = |s: &str| -> String { s.to_lowercase().replace("/", "").replace("-", "") };
 
     if let Some(expected) = INSTRUMENTS.get(platform_name) {
         match expected {
